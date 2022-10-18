@@ -41,7 +41,7 @@ class MonetDialect(default.DefaultDialect):
     supports_multivalues_insert = True
     poolclass = pool.SingletonThreadPool
     supports_unicode_statements = True
-    postfetch_lastrowid = False
+    postfetch_lastrowid = True
     supports_is_distinct_from = False
 
     statement_compiler = MonetCompiler
