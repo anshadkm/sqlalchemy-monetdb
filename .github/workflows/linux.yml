@@ -8,8 +8,8 @@ jobs:
     continue-on-error: true
     strategy:
       matrix:
-        branch: [default]
-        python-version: [3.7, 3.8, 3.9, '3.10']
+        branch: [default, sqlalchemy-2.0-upgrade]
+        python-version: [3.8, 3.9, '3.10', '3.11']
     container: monetdb/dev-builds:${{ matrix.branch }}
     steps:
       -
