@@ -2,6 +2,7 @@ import re
 import typing
 from typing import Optional
 
+from sqlalchemy import text
 from sqlalchemy import sql, util
 from sqlalchemy import types as sqltypes
 
@@ -73,36 +74,29 @@ class MonetDialect(default.DefaultDialect):
             FROM sys.tables
             WHERE system = false
             AND type = 0
-            AND schema_id = %(schema_id)s
+            AND schema_id = :schema_id
         """
         args = {"schema_id": self._schema_id(connection, schema)}
-        return [row[0] for row in connection.execute(q, args)]
+        return [row[0] for row in connection.execute(text(q), args)]
 
     @reflection.cache
     def get_temp_table_names(self, con: "Connection", **kw):
         # 2097 is tmp schema, 30 is table type LOCAL TEMPORARY
         s = "SELECT tables.name FROM sys.tables WHERE schema_id = 2097 AND type = 30"
-        rs = con.execute(s)
+        rs = con.execute(text(s))
         return [row[0] for row in rs]
 
     def has_table(self, connection: "Connection", table_name, schema=None, **kw):
         # seems like case gets folded in pg_class...
         if schema is None:
             cursor = connection.execute(
-                sql.text(
-                    "select name "
-                    "from sys.tables "
-                    "where system = false "
-                    "and type = 0 "
-                    "and name=:name",
-                ).bindparams(
-                    sql.bindparam('name', util.text_type(table_name),
-                                  type_=sqltypes.Unicode)
-                )
-            )
+                text(
+                    "select name from sys.tables where system = false and type = 0 and name = :name"
+                ), {'name': table_name})
+
         else:
             cursor = connection.execute(
-                sql.text(
+                text(
                     "SELECT tables.name "
                     "FROM sys.tables, sys.schemas "
                     "WHERE tables.system = FALSE "
@@ -110,29 +104,22 @@ class MonetDialect(default.DefaultDialect):
                     "AND type = 0 "
                     "AND tables.name = :name "
                     "AND schemas.name = :schema",
-                    ).bindparams(
-                        sql.bindparam('name',
-                                      util.text_type(table_name),
-                                      type_=sqltypes.Unicode),
-                        sql.bindparam('schema',
-                                      util.text_type(schema),
-                                      type_=sqltypes.Unicode)
-                )
-            )
+                    ), {'name': table_name, 'schema': schema})
+
         return bool(cursor.first())
 
     def has_sequence(self, connection: "Connection", sequence_name, schema=None, **kw):
         q = """
             SELECT id
             FROM sys.sequences
-            WHERE name = %(name)s
-            AND schema_id = %(schema_id)s
+            WHERE name = :name
+            AND schema_id = :schema_id
         """
         args = {
             "name": sequence_name,
             "schema_id": self._schema_id(connection, schema)
         }
-        cursor = connection.execute(q, args)
+        cursor = connection.execute(text(q), args)
         return bool(cursor.first())
 
     def get_sequence_names(self, connection: "Connection", schema: Optional[str] = None, **kw):
@@ -146,11 +133,11 @@ class MonetDialect(default.DefaultDialect):
 
         q = "SELECT name FROM sys.sequences"
         if schema:
-            q += " AND schema_id = %(schema_id)s"
+            q += " AND schema_id = :schema_id"
         args = {
             "schema_id": self._schema_id(connection, schema)
         }
-        cursor = connection.execute(q, args)
+        cursor = connection.execute(text(q), args)
         return cursor.fetchall()
 
     @reflection.cache
@@ -158,15 +145,15 @@ class MonetDialect(default.DefaultDialect):
         """Fetch the id for schema"""
 
         if schema_name is None:
-            schema_name = con.execute("SELECT current_schema").scalar()
+            schema_name = con.execute(text("SELECT current_schema")).scalar()
 
         query = """
                     SELECT id
                     FROM sys.schemas
-                    WHERE name = %(schema_name)s
+                    WHERE name = :schema_name
                 """
         args = {"schema_name": schema_name}
-        cursor = con.execute(query, args)
+        cursor = con.execute(text(query), args)
         schema_id = cursor.scalar()
         if schema_id is None:
             raise exc.InvalidRequestError(schema_name)
@@ -180,14 +167,14 @@ class MonetDialect(default.DefaultDialect):
         q = """
             SELECT id
             FROM sys.tables
-            WHERE name = %(name)s
-            AND schema_id = %(schema_id)s
+            WHERE name = :name
+            AND schema_id = :schema_id
         """
         args = {
             "name": table_name,
             "schema_id": self._schema_id(con, schema_name)
         }
-        c = con.execute(q, args)
+        c = con.execute(text(q), args)
 
         table_id = c.scalar()
         if table_id is None:
@@ -199,10 +186,10 @@ class MonetDialect(default.DefaultDialect):
         q = """
             SELECT id, name, type, "default", "null", type_digits, type_scale
             FROM sys.columns
-            WHERE columns.table_id = %(table_id)s
+            WHERE columns.table_id = :table_id
         """
         args = {"table_id": self._table_id(connection, table_name, schema)}
-        c = connection.execute(q, args)
+        c = connection.execute(text(q), args)
 
         result = []
         for row in c:
@@ -290,11 +277,11 @@ class MonetDialect(default.DefaultDialect):
             JOIN sys.schemas AS pkschema ON (pkschema.id = pktable.schema_id)
             WHERE fkkey.rkey > -1
               AND fkkeycol.nr = pkkeycol.nr
-              AND fktable.id = %(table_id)s
+              AND fktable.id = :table_id
             ORDER BY name, key_seq
         """
         args = {"table_id": self._table_id(connection, table_name, schema)}
-        c = connection.execute(q, args)
+        c = connection.execute(text(q), args)
 
         results = []
         key_data = {}
@@ -333,10 +320,10 @@ class MonetDialect(default.DefaultDialect):
             SELECT idxs.name, objects.name AS "column_name"
             FROM sys.idxs
             JOIN sys.objects USING (id)
-            WHERE table_id = %(table_id)s
+            WHERE table_id = :table_id
             ORDER BY idxs.name, objects.nr
         """
-        c = connection.execute(q, {
+        c = connection.execute(text(q), {
             "table_id": self._table_id(connection, table_name, schema)})
 
         results = []
@@ -376,7 +363,7 @@ class MonetDialect(default.DefaultDialect):
         s = """
                 SELECT name FROM sys.schemas ORDER BY name
             """
-        c = con.execute(s)
+        c = con.execute(text(s))
         schema_names = [row[0] for row in c]
         return schema_names
 
@@ -391,14 +378,14 @@ class MonetDialect(default.DefaultDialect):
         q = """
             SELECT query FROM sys.tables
             WHERE type = 1
-            AND name = %(name)s
-            AND schema_id = %(schema_id)s
+            AND name = :name
+            AND schema_id = :schema_id
         """
         args = {
             "name": view_name,
             "schema_id": self._schema_id(connection, schema)
         }
-        return connection.execute(q, args)
+        return connection.execute(text(q), args)
 
     def get_view_names(self, connection: "Connection", schema=None, **kw):
         """Return a list of all view names available in the database.
@@ -410,10 +397,10 @@ class MonetDialect(default.DefaultDialect):
             SELECT name
             FROM sys.tables
             WHERE type = 1
-            AND schema_id = %(schema_id)s
+            AND schema_id = :schema_id
         """
         args = {"schema_id": self._schema_id(connection, schema)}
-        return [row[0] for row in connection.execute(q, args)]
+        return [row[0] for row in connection.execute(text(q), args)]
 
     def _get_default_schema_name(self, connection):
         """Return the string name of the currently selected schema from
@@ -423,7 +410,7 @@ class MonetDialect(default.DefaultDialect):
         "default_schema_name" attribute and is called exactly
         once upon first connect.
         """
-        return connection.execute("SELECT CURRENT_SCHEMA").scalar()
+        return connection.execute(text("SELECT CURRENT_SCHEMA")).scalar()
 
     def get_pk_constraint(self, connection: "Connection", table_name, schema=None, **kw):
         """Return information about primary key constraint on `table_name`.
@@ -448,10 +435,10 @@ class MonetDialect(default.DefaultDialect):
                          AND "keys"."table_id" = "tables"."id"
                          AND "tables"."schema_id" = "schemas"."id"
                          AND "keys"."type" = 0
-                         AND "tables"."id" = %(table_id)s
+                         AND "tables"."id" = :table_id
         """
         args = {"table_id": self._table_id(connection, table_name, schema)}
-        c = connection.execute(q, args)
+        c = connection.execute(text(q), args)
         table = c.fetchall()
         if table:
             cols = [c[0] for c in table]
@@ -488,10 +475,10 @@ class MonetDialect(default.DefaultDialect):
                          AND "keys"."table_id" = "tables"."id"
                          AND "tables"."schema_id" = "schemas"."id"
                          AND "keys"."type" = 1
-                         AND "tables"."id" = %(table_id)s
+                         AND "tables"."id" = :table_id
         """
         args = {"table_id": self._table_id(connection, table_name, schema)}
-        c = connection.execute(q, args)
+        c = connection.execute(text(q), args)
         table = c.fetchall()
 
         from collections import defaultdict
