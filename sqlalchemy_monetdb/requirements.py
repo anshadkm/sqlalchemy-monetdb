@@ -1531,3 +1531,11 @@ class Requirements(SuiteRequirements):
     def generic_classes(self):
         "If X[Y] can be implemented with ``__class_getitem__``. py3.7+"
         return exclusions.only_if(lambda: util.py37)
+
+    @property
+    def uuid_data_type(self):
+        return exclusions.open()
+
+    @property
+    def array_type(self):
+        return exclusions.closed()
