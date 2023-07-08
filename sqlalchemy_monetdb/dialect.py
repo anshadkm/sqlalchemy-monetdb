@@ -26,8 +26,8 @@ try:
 except ImportError:
     pass
 
-
 class MonetDialect(default.DefaultDialect):
+
     supports_statement_cache = False
     name = "monetdb"
     driver = "pymonetdb"
@@ -353,10 +353,12 @@ class MonetDialect(default.DefaultDialect):
         return results
 
     def do_commit(self, connection):
-        connection.commit()
+        if not(connection.autocommit):
+            connection.commit()
 
     def do_rollback(self, connection):
-        connection.rollback()
+        if not(connection.autocommit):
+            connection.rollback()
 
     @reflection.cache
     def get_schema_names(self, con: "Connection", **kw):
@@ -377,7 +379,7 @@ class MonetDialect(default.DefaultDialect):
 
         q = """
             SELECT query FROM sys.tables
-            WHERE type = 1
+            WHERE type = 11
             AND name = :name
             AND schema_id = :schema_id
         """
@@ -396,7 +398,7 @@ class MonetDialect(default.DefaultDialect):
         q = """
             SELECT name
             FROM sys.tables
-            WHERE type = 1
+            WHERE type = 11
             AND schema_id = :schema_id
         """
         args = {"schema_id": self._schema_id(connection, schema)}
@@ -488,6 +490,36 @@ class MonetDialect(default.DefaultDialect):
             col_dict[name].append(col)
 
         return [{'name': n, 'column_names': c} for n, c in col_dict.items()]
+
+    def get_check_constraints(self, connection, table_name, schema=None, **kw):
+        return []
+
+    def get_isolation_level_values(self, dbapi_conn):
+        return (
+            "AUTOCOMMIT",
+            "SERIALIZABLE",
+        )
+
+    def set_isolation_level(self, dbapi_connection, level):
+        if level == "AUTOCOMMIT":
+            dbapi_connection.set_autocommit(True)
+        else:
+            dbapi_connection.set_autocommit(False)
+            #cursor = dbapi_connection.cursor()
+            #print("todo ISO level %s\n" % level)
+            #cursor.execute( "SET SESSION CHARACTERISTICS AS TRANSACTION " f"ISOLATION LEVEL {level}"
+            #cursor.execute("COMMIT")
+            #cursor.close()
+
+    def get_isolation_level(self, dbapi_connection):
+        if dbapi_connection.autocommit:
+            return "AUTOCOMMIT"
+        return "SERIALIZABLE"
+        #cursor = dbapi_connection.cursor()
+        #cursor.execute("show transaction isolation level")
+        #val = cursor.fetchone()[0]
+        #cursor.close()
+        #return val.upper()
 
 
 
