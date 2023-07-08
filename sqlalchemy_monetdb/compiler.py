@@ -41,7 +41,13 @@ class MonetDDLCompiler(compiler.DDLCompiler):
 
     def visit_check_constraint(self, constraint, **kwargs):
         # TODO: this turns out to be an error in pytest 
-        util.warn("Skipped unsupported check constraint %s" % constraint.name)
+        #util.warn("Skipped unsupported check constraint %s" % constraint.name)
+        return None
+
+    def visit_column_check_constraint(self, constraint, **kw):
+        # TODO: this turns out to be an error in pytest 
+        #util.warn("Skipped unsupported check constraint %s" % constraint.name)
+        return None
 
 
 class MonetTypeCompiler(compiler.GenericTypeCompiler):
