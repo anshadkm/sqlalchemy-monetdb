@@ -1,6 +1,6 @@
 from sqlalchemy import types as sqltypes
 from sqlalchemy.types import INTEGER, BIGINT, SMALLINT, VARCHAR, CHAR, TEXT,\
-    FLOAT, DATE, BOOLEAN, DECIMAL, TIMESTAMP, TIME, BLOB
+    FLOAT, DATE, BOOLEAN, DECIMAL, TIMESTAMP, TIME, BLOB, UserDefinedType
 
 
 class INET(sqltypes.TypeEngine):
@@ -22,7 +22,6 @@ class DOUBLE_PRECISION(sqltypes.Float):
 class TINYINT(sqltypes.Integer):
     __visit_name__ = "TINYINT"
 
-
 MONETDB_TYPE_MAP = {
     'tinyint': TINYINT,
     'wrd': WRD,
@@ -43,4 +42,5 @@ MONETDB_TYPE_MAP = {
     'timestamp': TIMESTAMP,
     'timestamptz': TIMESTAMP,
     'varchar': VARCHAR,
+    'uuid': UserDefinedType,
 }
