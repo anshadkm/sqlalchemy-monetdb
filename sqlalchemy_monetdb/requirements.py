@@ -916,6 +916,7 @@ class Requirements(SuiteRequirements):
                 ]
             }
         """
+        return { "default": "SERIALIZABLE", "supported": [ "AUTOCOMMIT", "SERIALIZABLE" ] }
 
     @property
     def json_type(self):
@@ -1096,7 +1097,8 @@ class Requirements(SuiteRequirements):
     def savepoints(self):
         """Target database must support savepoints."""
         # TODO: MonetDB supports SAVEPOINT. let's see if pymonetdb is ok
-        return exclusions.open()
+        #return exclusions.open()
+        return exclusions.close()
 
     @property
     def two_phase_transactions(self):
