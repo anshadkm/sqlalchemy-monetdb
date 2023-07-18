@@ -1,6 +1,7 @@
 import re
 import typing
 from typing import Optional
+from collections import defaultdict
 
 from sqlalchemy import text
 from sqlalchemy import sql, util
@@ -255,65 +256,81 @@ class MonetDialect(default.DefaultDialect):
 
         """
 
-        q = """
-            SELECT
-            fkkey.name AS name,
-            fkschema.name AS fktable_schema,
-            fktable.name AS fktable_name,
-            fkkeycol.name AS fkcolumn_name,
-            fktable.id AS fktable_id,
-            pkschema.name AS pktable_schema,
-            pktable.name AS pktable_name,
-            pkkeycol.name AS pkcolumn_name,
-            pktable.id AS pktable_id,
-            pkkeycol.nr AS key_seq
-            FROM sys.keys AS fkkey
-            JOIN sys.tables AS fktable ON (fktable.id = fkkey.table_id)
-            JOIN sys.objects AS fkkeycol ON (fkkey.id = fkkeycol.id)
-            JOIN sys.keys AS pkkey ON (fkkey.rkey = pkkey.id)
-            JOIN sys.objects AS pkkeycol ON (pkkey.id = pkkeycol.id)
-            JOIN sys.tables AS pktable ON (pktable.id = pkkey.table_id)
-            JOIN sys.schemas AS fkschema ON (fkschema.id = fktable.schema_id)
-            JOIN sys.schemas AS pkschema ON (pkschema.id = pktable.schema_id)
-            WHERE fkkey.rkey > -1
-              AND fkkeycol.nr = pkkeycol.nr
-              AND fktable.id = :table_id
-            ORDER BY name, key_seq
-        """
-        args = {"table_id": self._table_id(connection, table_name, schema)}
+        q = ""
+        args = {}
+        if schema:
+            q = """select fk_s, fk_t, fk_c, o, fk, pk_s, pk_t, pk_c, on_update, on_delete from sys.describe_foreign_keys where fk_t = :table AND fk_s = :schema"""
+            args = {"table": table_name, "schema": schema }
+        else:
+            q = """select fk_s, fk_t, fk_c, o, fk, pk_s, pk_t, pk_c, on_update, on_delete from sys.describe_foreign_keys where fk_t = :table AND fk_s = CURRENT_SCHEMA"""
+            args = {"table": table_name }
         c = connection.execute(text(q), args)
 
-        results = []
-        key_data = {}
+        key_data = None
         constrained_columns = []
         referred_columns = []
         last_name = None
+        ondelete = None
+        onupdate = None
 
+        # build result like (tobe implemented) get_multi_foreign_keys
+        fkeys = defaultdict(list)
+        results = fkeys [(schema,table_name)] 
         for row in c:
-            if last_name is not None and last_name != row.name:
+            if last_name is not None and last_name != row.fk:
                 key_data["constrained_columns"] = constrained_columns
                 key_data["referred_columns"] = referred_columns
+                key_data["options"] = { k: v for k, v in [
+                    ("onupdate", onupdate),
+                    ("ondelete", ondelete),
+                    #("initially", False),
+                    #("deferrable", False),
+                    #("match", "full"),
+                 ]
+                 if v is not None and v != "NO ACTION"
+                }
                 results.append(key_data)
                 constrained_columns = []
                 referred_columns = []
+                ondelete = None
+                onupdate = None
+                key_data = None
 
-            if last_name is None or last_name != row.name:
+            if last_name is None or last_name != row.fk:
                 key_data = {
-                    "name": row.name,
-                    "referred_schema": row.pktable_schema,
-                    "referred_table": row.pktable_name,
+                    "name": row.fk,
+                    "referred_schema": row.pk_s if schema else None,
+                    "referred_table": row.pk_t,
                 }
+                ondelete = row.on_delete
+                onupdate = row.on_update
 
-            last_name = row.name
-            constrained_columns.append(row.fkcolumn_name)
-            referred_columns.append(row.pkcolumn_name)
+            last_name = row.fk
+            constrained_columns.append(row.fk_c)
+            referred_columns.append(row.pk_c)
 
         if key_data:
             key_data["constrained_columns"] = constrained_columns
             key_data["referred_columns"] = referred_columns
+            key_data["options"] = { k: v for k, v in [
+                    ("onupdate", onupdate),
+                    ("ondelete", ondelete),
+                    #("initially", False),
+                    #("deferrable", False),
+                    #("match", "full"),
+                ]
+                #if v is not None and v != "NO ACTION"
+                if v is not None and v != "NO ACTION"
+            }
             results.append(key_data)
 
-        return results
+        data = fkeys.items()
+        try:
+            return dict(data)[(schema, table_name)]
+        except KeyError:
+            raise exc.NoSuchTableError(
+                f"{schema}.{table_name}" if schema else table_name
+            ) from None
 
     def get_indexes(self, connection: "Connection", table_name, schema=None, **kw):
         q = """
