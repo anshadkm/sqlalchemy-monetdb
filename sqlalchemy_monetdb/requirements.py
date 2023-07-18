@@ -679,7 +679,7 @@ class Requirements(SuiteRequirements):
     @property
     def index_reflects_included_columns(self):
         # NOTE: let's see what metadata the tests need
-        return exclusions.open()
+        return exclusions.closed()
 
     @property
     def indexes_with_ascdesc(self):
@@ -1097,8 +1097,8 @@ class Requirements(SuiteRequirements):
     def savepoints(self):
         """Target database must support savepoints."""
         # TODO: MonetDB supports SAVEPOINT. let's see if pymonetdb is ok
-        #return exclusions.open()
-        return exclusions.close()
+        return exclusions.open()
+        #return exclusions.close()
 
     @property
     def two_phase_transactions(self):

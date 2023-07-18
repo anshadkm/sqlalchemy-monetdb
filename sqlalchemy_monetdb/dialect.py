@@ -229,6 +229,14 @@ class MonetDialect(default.DefaultDialect):
             result.append(column)
         return result
 
+    def _value_or_raise(self, data, table, schema):
+        try:
+            return dict(data)[(schema, table)]
+        except KeyError:
+            raise exc.NoSuchTableError(
+                f"{schema}.{table}" if schema else table
+            ) from None
+
     def get_foreign_keys(self, connection: "Connection", table_name, schema=None, **kw):
         """Return information about foreign_keys in `table_name`.
 
@@ -275,7 +283,7 @@ class MonetDialect(default.DefaultDialect):
 
         # build result like (tobe implemented) get_multi_foreign_keys
         fkeys = defaultdict(list)
-        results = fkeys [(schema,table_name)] 
+        results = fkeys[(schema,table_name)] 
         for row in c:
             if last_name is not None and last_name != row.fk:
                 key_data["constrained_columns"] = constrained_columns
@@ -294,7 +302,6 @@ class MonetDialect(default.DefaultDialect):
                 referred_columns = []
                 ondelete = None
                 onupdate = None
-                key_data = None
 
             if last_name is None or last_name != row.fk:
                 key_data = {
@@ -325,49 +332,59 @@ class MonetDialect(default.DefaultDialect):
             results.append(key_data)
 
         data = fkeys.items()
-        try:
-            return dict(data)[(schema, table_name)]
-        except KeyError:
-            raise exc.NoSuchTableError(
-                f"{schema}.{table_name}" if schema else table_name
-            ) from None
+        return self._value_or_raise(data, table_name, schema)
 
     def get_indexes(self, connection: "Connection", table_name, schema=None, **kw):
-        q = """
-            SELECT idxs.name, objects.name AS "column_name"
-            FROM sys.idxs
-            JOIN sys.objects USING (id)
-            WHERE table_id = :table_id
-            ORDER BY idxs.name, objects.nr
         """
-        c = connection.execute(text(q), {
-            "table_id": self._table_id(connection, table_name, schema)})
+        ReflectedIndex list
+            column_names: List[str | None],
+            column_sorting: NotRequired[Dict[str, Tuple[str]]],
+            dialect_options: NotRequired[Dict[str, Any]],
+            duplicates_constraint: NotRequired[str | None],
+            expressions: NotRequired[List[str]],
+            include_columns: NotRequired[List[str]],
+            name: str | None,
+            unique: bool
+        """
 
-        results = []
+        q = ""
+        args = {}
+        if schema:
+            q = """select ind, sch, tbl, col, tpe from sys.describe_indices where tbl = :table AND sch = :schema"""
+            args = {"table": table_name, "schema": schema }
+        else:
+            q = """select ind, sch, tbl, col, tpe from sys.describe_indices where tbl = :table AND sch = CURRENT_SCHEMA"""
+            args = {"table": table_name }
+        c = connection.execute(text(q), args)
+
         last_name = None
         column_names = []
-        index_data = {}
+        index_data = None
 
+        idxs = defaultdict(list)
+        results = idxs[(schema,table_name)] 
         for row in c:
-            if last_name is not None and last_name != row.name:
+            print(row)
+            if last_name is not None and last_name != row.ind:
                 index_data["column_names"] = column_names
                 results.append(index_data)
                 column_names = []
 
-            if last_name is None or last_name != row.name:
+            if last_name is None or last_name != row.ind:
                 index_data = {
-                    "name": row.name,
+                    "name": row.ind,
                     "unique": False,
                 }
 
-            last_name = row.name
-            column_names.append(row.column_name)
+            last_name = row.ind
+            column_names.append(row.col)
 
         if index_data:
             index_data["column_names"] = column_names
             results.append(index_data)
 
-        return results
+        data = idxs.items()
+        return self._value_or_raise(data, table_name, schema)
 
     def do_commit(self, connection):
         if not(connection.autocommit):
