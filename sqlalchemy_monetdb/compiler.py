@@ -1,6 +1,13 @@
 from sqlalchemy import types as sqltypes, schema, util
 from sqlalchemy.sql import compiler
+import re
 
+FK_ON_DELETE = re.compile(
+    r"^(?:RESTRICT|CASCADE|SET NULL|NO ACTION|SET DEFAULT)$", re.I
+)
+FK_ON_UPDATE = re.compile(
+    r"^(?:RESTRICT|CASCADE|SET NULL|NO ACTION|SET DEFAULT)$", re.I
+)
 
 class MonetDDLCompiler(compiler.DDLCompiler):
     def visit_create_sequence(self, create, **kwargs):
@@ -15,6 +22,16 @@ class MonetDDLCompiler(compiler.DDLCompiler):
     def visit_drop_sequence(self, drop, **kwargs):
         return "DROP SEQUENCE %s" % \
                self.preparer.format_sequence(drop.element)
+
+    def define_constraint_cascades(self, constraint):
+        text = ""
+        text += " ON DELETE %s" % self.preparer.validate_sql_phrase(
+            constraint.ondelete if constraint.ondelete else 'NO ACTION' , FK_ON_DELETE
+        )
+        text += " ON UPDATE %s" % self.preparer.validate_sql_phrase(
+            constraint.onupdate if constraint.onupdate else 'NO ACTION', FK_ON_UPDATE
+        )
+        return text
 
     def get_column_specification(self, column, **kwargs):
         colspec = self.preparer.format_column(column)
@@ -48,6 +65,32 @@ class MonetDDLCompiler(compiler.DDLCompiler):
         # TODO: this turns out to be an error in pytest 
         #util.warn("Skipped unsupported check constraint %s" % constraint.name)
         return None
+
+    def visit_create_index(self, create, **kw):
+        preparer = self.preparer
+        index = create.element
+        if index.unique:
+            text = "ALTER TABLE %s ADD CONSTRAINT %s UNIQUE " % ( 
+                preparer.format_table(index.table),
+                self._prepared_index_name(index, include_schema=False),
+            )
+        else:
+            text = "CREATE "
+            text += "INDEX "
+            text += "%s ON %s " % (
+             self._prepared_index_name(index, include_schema=False),
+             preparer.format_table(index.table),
+            )
+
+        if len(index.expressions) > 0:
+            text += " (%s)" % ", ".join(
+                self.sql_compiler.process(
+                    expr, include_table=False, literal_binds=True
+                )
+                for expr in index.expressions
+            )
+
+        return text
 
 
 class MonetTypeCompiler(compiler.GenericTypeCompiler):

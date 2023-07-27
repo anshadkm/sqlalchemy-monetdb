@@ -82,8 +82,14 @@ class MonetDialect(default.DefaultDialect):
 
     @reflection.cache
     def get_temp_table_names(self, con: "Connection", **kw):
-        # 2097 is tmp schema, 30 is table type LOCAL TEMPORARY
-        s = "SELECT tables.name FROM sys.tables WHERE schema_id = 2097 AND type = 30"
+        # 30 is table type LOCAL TEMPORARY
+        s = "SELECT tables.name FROM sys.tables WHERE schema_id = (select id from schemas where name = 'tmp') AND type = 30"
+        rs = con.execute(text(s))
+        return [row[0] for row in rs]
+
+    def get_temp_view_names(self, con: "Connection", **kw):
+        # 31 is table type LOCAL TEMPORARY
+        s = "SELECT tables.name FROM sys.tables WHERE schema_id = (select id from schemas where name = 'tmp') AND type = 31"
         rs = con.execute(text(s))
         return [row[0] for row in rs]
 
@@ -184,12 +190,16 @@ class MonetDialect(default.DefaultDialect):
         return table_id
 
     def get_columns(self, connection: "Connection", table_name, schema=None, **kw):
-        q = """
-            SELECT id, name, type, "default", "null", type_digits, type_scale
-            FROM sys.columns
-            WHERE columns.table_id = :table_id
-        """
-        args = {"table_id": self._table_id(connection, table_name, schema)}
+        if schema == 'tmp':
+            return []
+        q = ""
+        args = {}
+        if schema:
+            q = """select name, \"type\", digits, scale, nulls as \"null\", cdefault from sys.describe_columns(:schema, :table)"""
+            args = {"table": table_name, "schema": schema }
+        else:
+            q = """select name, \"type\", digits, scale, nulls as \"null\", cdefault from sys.describe_columns(CURRENT_SCHEMA, :table)"""
+            args = {"table": table_name }
         c = connection.execute(text(q), args)
 
         result = []
@@ -198,9 +208,9 @@ class MonetDialect(default.DefaultDialect):
             kwargs = {}
             name = row.name
             if row.type in ("char", "varchar"):
-                args = (row.type_digits,)
+                args = (row.digits,)
             elif row.type == "decimal":
-                args = (row.type_digits, row.type_scale)
+                args = (row.digits, row.scale)
             elif row.type == 'timestamptz':
                 kwargs = {'timezone': True}
             col_type = MONETDB_TYPE_MAP.get(row.type, None)
@@ -210,9 +220,9 @@ class MonetDialect(default.DefaultDialect):
 
             # monetdb translates an AUTO INCREMENT into a sequence
             autoincrement = False
-            if row.default is not None:
+            if row.cdefault is not None:
                 r = r"""next value for \"(\w*)\"\.\"(\w*)"$"""
-                match = re.search(r, row.default)
+                match = re.search(r, row.cdefault)
                 if match is not None:
                     seq_schema = match.group(1)
                     seq = match.group(2)
@@ -221,7 +231,7 @@ class MonetDialect(default.DefaultDialect):
             column = {
                 "name": name,
                 "type": col_type,
-                "default": row.default,
+                "default": row.cdefault,
                 "autoincrement": autoincrement,
                 "nullable": row.null,
             }
@@ -326,7 +336,6 @@ class MonetDialect(default.DefaultDialect):
                     #("deferrable", False),
                     #("match", "full"),
                 ]
-                #if v is not None and v != "NO ACTION"
                 if v is not None and v != "NO ACTION"
             }
             results.append(key_data)
@@ -350,21 +359,24 @@ class MonetDialect(default.DefaultDialect):
         q = ""
         args = {}
         if schema:
-            q = """select ind, sch, tbl, col, tpe from sys.describe_indices where tbl = :table AND sch = :schema"""
+            q = """select ind, sch, tbl, col, tpe from sys.describe_indices where tbl = :table AND sch = :schema
+            union
+                   select con as ind, sch, tbl, col, tpe from sys.describe_constraints where tbl = :table AND sch = :schema and tpe = 'UNIQUE'"""
             args = {"table": table_name, "schema": schema }
         else:
-            q = """select ind, sch, tbl, col, tpe from sys.describe_indices where tbl = :table AND sch = CURRENT_SCHEMA"""
+            q = """select ind, sch, tbl, col, tpe from sys.describe_indices where tbl = :table AND sch = CURRENT_SCHEMA
+            union
+                   select con as ind, sch, tbl, col, tpe from sys.describe_constraints where tbl = :table AND sch = CURRENT_SCHEMA and tpe = 'UNIQUE'"""
             args = {"table": table_name }
         c = connection.execute(text(q), args)
 
-        last_name = None
-        column_names = []
         index_data = None
+        column_names = []
+        last_name = None
 
         idxs = defaultdict(list)
         results = idxs[(schema,table_name)] 
         for row in c:
-            print(row)
             if last_name is not None and last_name != row.ind:
                 index_data["column_names"] = column_names
                 results.append(index_data)
@@ -373,7 +385,9 @@ class MonetDialect(default.DefaultDialect):
             if last_name is None or last_name != row.ind:
                 index_data = {
                     "name": row.ind,
-                    "unique": False,
+                    "unique": True if row.tpe == 'UNIQUE' else False,
+                    "include_columns": [],
+                    "dialect_options": {},
                 }
 
             last_name = row.ind
@@ -413,7 +427,7 @@ class MonetDialect(default.DefaultDialect):
 
         q = """
             SELECT query FROM sys.tables
-            WHERE type = 11
+            WHERE type = 1
             AND name = :name
             AND schema_id = :schema_id
         """
@@ -432,7 +446,7 @@ class MonetDialect(default.DefaultDialect):
         q = """
             SELECT name
             FROM sys.tables
-            WHERE type = 11
+            WHERE type = 1
             AND schema_id = :schema_id
         """
         args = {"schema_id": self._schema_id(connection, schema)}
