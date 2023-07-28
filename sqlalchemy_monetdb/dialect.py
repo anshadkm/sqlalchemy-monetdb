@@ -195,7 +195,6 @@ class MonetDialect(default.DefaultDialect):
           q = ""
           args = {}
           if ischema:
-            q = """select name, \"type\", digits, scale, nulls as \"null\", cdefault from sys.describe_columns(:schema, :table)"""
             q = """SELECT c.name, c."type", c.type_digits digits, c.type_scale scale, c."null", c."default" cdefault, c.number
                 FROM sys.tables t, sys.schemas s, sys.columns c                                                                                                                           
                         WHERE c.table_id = t.id                                                                                                                                             
@@ -208,7 +207,6 @@ class MonetDialect(default.DefaultDialect):
                 """ % (", ".join(str(tt) for tt in tabletypes))
             args = {"table": table_name, "schema": ischema, "temp": temp}
           else:
-            q = """select name, \"type\", digits, scale, nulls as \"null\", cdefault from sys.describe_columns(CURRENT_SCHEMA, :table)"""
             q = """SELECT c.name, c."type", c.type_digits digits, c.type_scale scale, c."null", c."default" cdefault, c.number
                 FROM sys.tables t, sys.schemas s, sys.columns c                                                                                                                           
                         WHERE c.table_id = t.id                                                                                                                                             
@@ -306,7 +304,8 @@ class MonetDialect(default.DefaultDialect):
                 f"{schema}.{table}" if schema else table
             ) from None
 
-    def get_foreign_keys(self, connection: "Connection", table_name, schema=None, **kw):
+    def _get_foreign_keys(self, connection: "Connection", filter_names=[], schema=None, temp=0, tabletypes=[ 0, 1], **kw):
+
         """Return information about foreign_keys in `table_name`.
 
         Given a string `table_name`, and an optional string `schema`, return
@@ -333,27 +332,34 @@ class MonetDialect(default.DefaultDialect):
 
         """
 
-        q = ""
-        args = {}
-        if schema:
+        ischema = schema
+        fkeys = defaultdict(list)
+        if len(tabletypes) == 0:
+            return fkeys.items()
+        if temp == 1:
+            if not schema:
+                ischema = 'tmp'
+        for table_name in filter_names:
+          q = ""
+          args = {}
+          if ischema:
             q = """select fk_s, fk_t, fk_c, o, fk, pk_s, pk_t, pk_c, on_update, on_delete from sys.describe_foreign_keys where fk_t = :table AND fk_s = :schema"""
-            args = {"table": table_name, "schema": schema }
-        else:
+            args = {"table": table_name, "schema": ischema }
+          else:
             q = """select fk_s, fk_t, fk_c, o, fk, pk_s, pk_t, pk_c, on_update, on_delete from sys.describe_foreign_keys where fk_t = :table AND fk_s = CURRENT_SCHEMA"""
             args = {"table": table_name }
-        c = connection.execute(text(q), args)
+          c = connection.execute(text(q), args)
 
-        key_data = None
-        constrained_columns = []
-        referred_columns = []
-        last_name = None
-        ondelete = None
-        onupdate = None
+          key_data = None
+          constrained_columns = []
+          referred_columns = []
+          last_name = None
+          ondelete = None
+          onupdate = None
 
-        # build result like (tobe implemented) get_multi_foreign_keys
-        fkeys = defaultdict(list)
-        results = fkeys[(schema,table_name)] 
-        for row in c:
+          # build result like (tobe implemented) get_multi_foreign_keys
+          results = fkeys[(schema,table_name)] 
+          for row in c:
             if last_name is not None and last_name != row.fk:
                 key_data["constrained_columns"] = constrained_columns
                 key_data["referred_columns"] = referred_columns
@@ -385,7 +391,7 @@ class MonetDialect(default.DefaultDialect):
             constrained_columns.append(row.fk_c)
             referred_columns.append(row.pk_c)
 
-        if key_data:
+          if key_data:
             key_data["constrained_columns"] = constrained_columns
             key_data["referred_columns"] = referred_columns
             key_data["options"] = { k: v for k, v in [
@@ -400,7 +406,42 @@ class MonetDialect(default.DefaultDialect):
             results.append(key_data)
 
         data = fkeys.items()
+        return data
+
+    def get_foreign_keys(self, connection: "Connection", table_name, schema=None, **kw):
+        data = self._get_foreign_keys(connection, [ table_name ], schema, temp=0, tabletypes=[0,1], **kw);
         return self._value_or_raise(data, table_name, schema)
+
+    def get_multi_foreign_keys( self, connection, schema, filter_names, scope, kind, **kw):
+        if scope is ObjectScope.ANY:
+            default_data = self.get_multi_foreign_keys(connection, schema, filter_names, ObjectScope.DEFAULT, kind, **kw);
+            temp_data = self.get_multi_foreign_keys(connection, schema, filter_names, ObjectScope.TEMPORARY, kind, **kw);
+            data = dict(default_data)
+            data.update(temp_data)
+            return data
+        temp = 0;
+        if scope is ObjectScope.DEFAULT:
+            temp = 0;
+        elif scope is ObjectScope.TEMPORARY:
+            temp = 1;
+        tabletypes = []
+        if not filter_names:
+            filter_names = []
+            if temp == 1:
+                tabletypes.append(30);
+                if ObjectKind.TABLE in kind:
+                    filter_names += self.get_temp_table_names(connection)
+            else:
+                if ObjectKind.TABLE in kind:
+                    filter_names += self.get_table_names(connection, schema)
+                if ObjectKind.VIEW in kind:
+                    filter_names += self.get_view_names(connection, schema)
+
+        if temp == 0 and ObjectKind.TABLE in kind:
+            tabletypes.append(0);
+        if temp == 0 and ObjectKind.VIEW in kind:
+            tabletypes.append(1);
+        return self._get_foreign_keys(connection, filter_names, schema, temp=temp, tabletypes=tabletypes, **kw);
 
     def get_indexes(self, connection: "Connection", table_name, schema=None, **kw):
         """
@@ -417,15 +458,51 @@ class MonetDialect(default.DefaultDialect):
 
         q = ""
         args = {}
+        dc = """
+            SELECT k.name as ind, s.name sch, t.name tbl, kc.name col, 'UNIQUE' as tpe
+                    FROM sys.schemas s, sys._tables t, sys.objects kc, sys.keys k
+                WHERE kc.id = k.id
+                AND k.table_id = t.id
+                AND s.id = t.schema_id
+                AND t.system = FALSE
+                AND k.type = 1
+                AND s.name = :schema
+                AND t.name = :table
+            ORDER BY k.name, kc.nr
+        """
         if schema:
             q = """select ind, sch, tbl, col, tpe from sys.describe_indices where tbl = :table AND sch = :schema
             union
-                   select con as ind, sch, tbl, col, tpe from sys.describe_constraints where tbl = :table AND sch = :schema and tpe = 'UNIQUE'"""
+                select * from (
+                SELECT k.name as ind, s.name sch, t.name tbl, kc.name col, 'UNIQUE' as tpe
+                        FROM sys.schemas s, sys._tables t, sys.objects kc, sys.keys k
+                    WHERE kc.id = k.id
+                    AND k.table_id = t.id
+                    AND s.id = t.schema_id
+                    AND t.system = FALSE
+                    AND k.type = 1
+                    AND s.name = :schema
+                    AND t.name = :table
+                ORDER BY k.name, kc.nr
+                ) as b
+            """ 
             args = {"table": table_name, "schema": schema }
         else:
             q = """select ind, sch, tbl, col, tpe from sys.describe_indices where tbl = :table AND sch = CURRENT_SCHEMA
             union
-                   select con as ind, sch, tbl, col, tpe from sys.describe_constraints where tbl = :table AND sch = CURRENT_SCHEMA and tpe = 'UNIQUE'"""
+                select * from (
+                SELECT k.name as ind, s.name sch, t.name tbl, kc.name col, 'UNIQUE' as tpe
+                    FROM sys.schemas s, sys._tables t, sys.objects kc, sys.keys k
+                    WHERE kc.id = k.id
+                    AND k.table_id = t.id
+                    AND s.id = t.schema_id
+                    AND t.system = FALSE
+                    AND k.type = 1
+                    AND s.name = CURRENT_SCHEMA
+                    AND t.name = :table
+                ORDER BY k.name, kc.nr
+                ) as b
+            """
             args = {"table": table_name }
         c = connection.execute(text(q), args)
 
