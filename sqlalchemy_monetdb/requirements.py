@@ -474,6 +474,14 @@ class Requirements(SuiteRequirements):
         return exclusions.open()
 
     @property
+    def materialized_views(self):
+        return exclusions.closed()
+
+    @property
+    def materialized_views_reflect_pk(self):
+        return exclusions.closed()
+
+    @property
     def schemas(self):
         """Target database must support external schemas, and have one
         named 'test_schema'."""

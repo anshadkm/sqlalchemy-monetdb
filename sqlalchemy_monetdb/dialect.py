@@ -8,7 +8,7 @@ from sqlalchemy import sql, util
 from sqlalchemy import types as sqltypes
 
 from sqlalchemy import pool, exc
-from sqlalchemy.engine import default, reflection
+from sqlalchemy.engine import default, reflection, ObjectScope, ObjectKind
 
 from sqlalchemy_monetdb.base import MonetExecutionContext, \
     MonetIdentifierPreparer
@@ -84,12 +84,6 @@ class MonetDialect(default.DefaultDialect):
     def get_temp_table_names(self, con: "Connection", **kw):
         # 30 is table type LOCAL TEMPORARY
         s = "SELECT tables.name FROM sys.tables WHERE schema_id = (select id from schemas where name = 'tmp') AND type = 30"
-        rs = con.execute(text(s))
-        return [row[0] for row in rs]
-
-    def get_temp_view_names(self, con: "Connection", **kw):
-        # 31 is table type LOCAL TEMPORARY
-        s = "SELECT tables.name FROM sys.tables WHERE schema_id = (select id from schemas where name = 'tmp') AND type = 31"
         rs = con.execute(text(s))
         return [row[0] for row in rs]
 
@@ -189,21 +183,49 @@ class MonetDialect(default.DefaultDialect):
 
         return table_id
 
-    def get_columns(self, connection: "Connection", table_name, schema=None, **kw):
-        if schema == 'tmp':
-            return []
-        q = ""
-        args = {}
-        if schema:
+    def _get_columns(self, connection: "Connection", filter_names=[], schema=None, temp=0, tabletypes=[ 0, 1], **kw):
+        ischema = schema
+        columns = defaultdict(list)
+        if len(tabletypes) == 0:
+            return columns.items()
+        if temp == 1:
+            if not schema:
+                ischema = 'tmp'
+        for table_name in filter_names:
+          q = ""
+          args = {}
+          if ischema:
             q = """select name, \"type\", digits, scale, nulls as \"null\", cdefault from sys.describe_columns(:schema, :table)"""
-            args = {"table": table_name, "schema": schema }
-        else:
+            q = """SELECT c.name, c."type", c.type_digits digits, c.type_scale scale, c."null", c."default" cdefault, c.number
+                FROM sys.tables t, sys.schemas s, sys.columns c                                                                                                                           
+                        WHERE c.table_id = t.id                                                                                                                                             
+                        AND t.name = :table                                                                                                                                              
+                        AND t.schema_id = s.id                                                                                                                                              
+                        AND t.temporary = :temp
+                        AND t.type in ( %s )
+                        AND s.name = :schema                                                                                                                                             
+                ORDER BY c.number;   
+                """ % (", ".join(str(tt) for tt in tabletypes))
+            args = {"table": table_name, "schema": ischema, "temp": temp}
+          else:
             q = """select name, \"type\", digits, scale, nulls as \"null\", cdefault from sys.describe_columns(CURRENT_SCHEMA, :table)"""
-            args = {"table": table_name }
-        c = connection.execute(text(q), args)
+            q = """SELECT c.name, c."type", c.type_digits digits, c.type_scale scale, c."null", c."default" cdefault, c.number
+                FROM sys.tables t, sys.schemas s, sys.columns c                                                                                                                           
+                        WHERE c.table_id = t.id                                                                                                                                             
+                        AND t.name = :table                                                                                                                                              
+                        AND t.schema_id = s.id                                                                                                                                              
+                        AND t.temporary = :temp
+                        AND t.type in ( %s )
+                        AND s.name = CURRENT_SCHEMA
+                ORDER BY c.number;   
+                """ % (", ".join(str(tt) for tt in tabletypes))
+            args = {"table": table_name, "temp": temp}
+          c = connection.execute(text(q), args)
 
-        result = []
-        for row in c:
+          if c.rowcount == 0:
+              continue
+          result = columns[(schema,table_name)] 
+          for row in c:
             args = ()
             kwargs = {}
             name = row.name
@@ -237,7 +259,44 @@ class MonetDialect(default.DefaultDialect):
             }
 
             result.append(column)
-        return result
+        return columns.items()
+
+    def get_columns(self, connection: "Connection", table_name, schema=None, **kw):
+        data = self._get_columns(connection, [ table_name ], schema, temp=0, tabletypes=[0,1],  **kw);
+        return self._value_or_raise(data, table_name, schema)                                                                                                                               
+    
+    def get_multi_columns(
+        self, connection, schema, filter_names, scope, kind, **kw
+    ):
+        if scope is ObjectScope.ANY:
+            default_data = self.get_multi_columns(connection, schema, filter_names, ObjectScope.DEFAULT, kind, **kw);
+            temp_data = self.get_multi_columns(connection, schema, filter_names, ObjectScope.TEMPORARY, kind, **kw);
+            data = dict(default_data)
+            data.update(temp_data)
+            return data
+        temp = 0;
+        if scope is ObjectScope.DEFAULT:
+            temp = 0;
+        elif scope is ObjectScope.TEMPORARY:
+            temp = 1;
+        tabletypes = []
+        if not filter_names:
+            filter_names = []
+            if temp == 1:
+                tabletypes.append(30);
+                if ObjectKind.TABLE in kind:
+                    filter_names += self.get_temp_table_names(connection)
+            else:
+                if ObjectKind.TABLE in kind:
+                    filter_names += self.get_table_names(connection, schema)
+                if ObjectKind.VIEW in kind:
+                    filter_names += self.get_view_names(connection, schema)
+
+        if temp == 0 and ObjectKind.TABLE in kind:
+            tabletypes.append(0);
+        if temp == 0 and ObjectKind.VIEW in kind:
+            tabletypes.append(1);
+        return self._get_columns(connection, filter_names, schema, temp=temp, tabletypes=tabletypes, **kw);
 
     def _value_or_raise(self, data, table, schema):
         try:
