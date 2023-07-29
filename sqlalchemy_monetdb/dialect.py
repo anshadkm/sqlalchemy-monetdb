@@ -692,7 +692,7 @@ ORDER BY fk_t, fk, o;
             name = table[0][1]
             return {'constrained_columns': cols, 'name': name}
         else:
-            return {}
+            return {'constrained_columns': [], 'name': None }
 
     def get_unique_constraints(self, connection: "Connection", table_name, schema=None, **kw):
         """Return information about unique constraints in `table_name`.
