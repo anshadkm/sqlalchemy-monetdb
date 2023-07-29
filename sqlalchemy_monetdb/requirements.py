@@ -659,11 +659,13 @@ class Requirements(SuiteRequirements):
 
     @property
     def temp_table_reflection(self):
-        return exclusions.open()
+        #return exclusions.open()
+        return exclusions.closed()
 
     @property
     def temp_table_reflect_indexes(self):
-        return self.temp_table_reflection
+        """MonetDB doesn't supports temporary indices"""
+        return exclusions.closed()
 
     @property
     def temp_table_names(self):
@@ -672,12 +674,12 @@ class Requirements(SuiteRequirements):
 
     @property
     def temporary_tables(self):
-        """target database supports temporary tables"""
+        """MonetDB supports temporary tables"""
         return exclusions.open()
 
     @property
     def temporary_views(self):
-        """target database supports temporary views"""
+        """MonetDB doesn't supports temporary views"""
         return exclusions.closed()
 
     @property
@@ -702,8 +704,17 @@ class Requirements(SuiteRequirements):
     @property
     def unique_constraint_reflection(self):
         """target dialect supports reflection of unique constraints"""
-        # NOTE: before it was closed() 
         return exclusions.open()
+
+    @property
+    def unique_index_reflect_as_unique_constraints(self):
+        """Target database reflects unique indexes as unique constrains."""
+        return exclusions.open()
+
+    @property                                                                                                                                                                               
+    def unique_constraints_reflect_as_index(self):                                                                                                                                          
+        """Target database reflects unique constraints as indexes."""       
+        return exclusions.open()                                                                                                                                                          
 
     @property
     def check_constraint_reflection(self):

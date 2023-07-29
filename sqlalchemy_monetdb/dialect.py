@@ -27,6 +27,9 @@ try:
 except ImportError:
     pass
 
+def quote(s):
+    return "'" + s + "'"
+
 class MonetDialect(default.DefaultDialect):
 
     supports_statement_cache = False
@@ -280,7 +283,7 @@ class MonetDialect(default.DefaultDialect):
         tabletypes = []
         if not filter_names:
             filter_names = []
-            if temp == 1:
+            if temp == 1 and not(schema):
                 tabletypes.append(30);
                 if ObjectKind.TABLE in kind:
                     filter_names += self.get_temp_table_names(connection)
@@ -304,7 +307,7 @@ class MonetDialect(default.DefaultDialect):
                 f"{schema}.{table}" if schema else table
             ) from None
 
-    def _get_foreign_keys(self, connection: "Connection", filter_names=[], schema=None, temp=0, tabletypes=[ 0, 1], **kw):
+    def _get_foreign_keys(self, connection: "Connection", schema=None, filter_names=[], temp=0, tabletypes=[ 0, 1], **kw):
 
         """Return information about foreign_keys in `table_name`.
 
@@ -334,64 +337,86 @@ class MonetDialect(default.DefaultDialect):
 
         ischema = schema
         fkeys = defaultdict(list)
-        if len(tabletypes) == 0:
+        if len(tabletypes) == 0 or len(filter_names) == 0:
             return fkeys.items()
         if temp == 1:
             if not schema:
                 ischema = 'tmp'
-        for table_name in filter_names:
-          q = ""
-          args = {}
-          if ischema:
-            q = """select fk_s, fk_t, fk_c, o, fk, pk_s, pk_t, pk_c, on_update, on_delete from sys.describe_foreign_keys where fk_t = :table AND fk_s = :schema"""
-            args = {"table": table_name, "schema": ischema }
-          else:
-            q = """select fk_s, fk_t, fk_c, o, fk, pk_s, pk_t, pk_c, on_update, on_delete from sys.describe_foreign_keys where fk_t = :table AND fk_s = CURRENT_SCHEMA"""
-            args = {"table": table_name }
-          c = connection.execute(text(q), args)
 
-          key_data = None
-          constrained_columns = []
-          referred_columns = []
-          last_name = None
-          ondelete = None
-          onupdate = None
+        q = """
+        WITH action_type (id, act) AS (VALUES (0, 'NO ACTION'), (1, 'CASCADE'), (2, 'RESTRICT'), (3, 'SET NULL'), (4, 'SET DEFAULT'))
+        select fk_s, fk_t, fk_c, o, fk, pk_s, pk_t, pk_c, on_update, on_delete from
+        (select fs.name fk_s, fkt.name fk_t, fkt.id id 
+         from sys.tables as fkt, sys.schemas as fs
+        where fkt.temporary = :temp AND fkt.type in (%s) AND fkt.schema_id = fs.id AND fs.name = %s AND fkt.name in (%s)) f
+        LEFT OUTER JOIN
+        (select fkkc.name fk_c, fkkc.nr o, fkk.name fk, fkk.table_id fktid, ps.name pk_s, pkt.name pk_t, pkkc.name pk_c, ou.act on_update, od.act on_delete
+        from sys.objects fkkc, sys.keys fkk, sys.tables pkt, sys.objects pkkc, sys.keys pkk, sys.schemas ps, action_type ou, action_type od
+                WHERE pkt.id = pkk.table_id
+                AND fkk.id = fkkc.id
+                AND pkk.id = pkkc.id
+                AND fkk.rkey = pkk.id
+                AND fkkc.nr = pkkc.nr
+                AND pkt.schema_id = ps.id
+                AND (fkk."action" & 255)         = od.id
+                AND ((fkk."action" >> 8) & 255)  = ou.id ) as fk
+        on f.id = fk.fktid
+ORDER BY fk_t, fk, o;
+        """ % ((", ".join(str(tt) for tt in tabletypes)), quote(ischema) if ischema else 'CURRENT_SCHEMA', ", ".join(quote(table_name) for table_name in filter_names))
+        args = {"temp": temp}
+        c = connection.execute(text(q), args)
 
-          # build result like (tobe implemented) get_multi_foreign_keys
-          results = fkeys[(schema,table_name)] 
-          for row in c:
-            if last_name is not None and last_name != row.fk:
-                key_data["constrained_columns"] = constrained_columns
-                key_data["referred_columns"] = referred_columns
-                key_data["options"] = { k: v for k, v in [
-                    ("onupdate", onupdate),
-                    ("ondelete", ondelete),
-                    #("initially", False),
-                    #("deferrable", False),
-                    #("match", "full"),
-                 ]
-                 if v is not None and v != "NO ACTION"
-                }
-                results.append(key_data)
+        key_data = None
+        constrained_columns = []
+        referred_columns = []
+        last_name = None
+        table_name = None
+        ondelete = None
+        onupdate = None
+        cnt = 0
+
+        for row in c:
+            if cnt and (last_name != row.fk or row.fk is None):
+                if key_data:
+                    key_data["constrained_columns"] = constrained_columns
+                    key_data["referred_columns"] = referred_columns
+                    key_data["options"] = { k: v for k, v in [
+                        ("onupdate", onupdate),
+                        ("ondelete", ondelete),
+                        #("initially", False),
+                        #("deferrable", False),
+                        #("match", "full"),
+                    ] if v is not None and v != "NO ACTION"
+                    }
+                    results.append(key_data)
                 constrained_columns = []
                 referred_columns = []
                 ondelete = None
                 onupdate = None
+                key_data = None
+                if table_name != row.fk_t:
+                    table_name = row.fk_t
+                    results = fkeys[(schema,table_name)] 
 
-            if last_name is None or last_name != row.fk:
-                key_data = {
-                    "name": row.fk,
-                    "referred_schema": row.pk_s if schema else None,
-                    "referred_table": row.pk_t,
-                }
-                ondelete = row.on_delete
-                onupdate = row.on_update
+            if table_name is None or last_name != row.fk:
+                if row.fk:
+                    key_data = {
+                        "name": row.fk,
+                        "referred_schema": row.pk_s if schema else None,
+                        "referred_table": row.pk_t,
+                    }
+                    ondelete = row.on_delete
+                    onupdate = row.on_update
+                table_name = row.fk_t
+                results = fkeys[(schema,table_name)] 
 
             last_name = row.fk
-            constrained_columns.append(row.fk_c)
-            referred_columns.append(row.pk_c)
+            cnt += 1;
+            if row.fk:
+                constrained_columns.append(row.fk_c)
+                referred_columns.append(row.pk_c)
 
-          if key_data:
+        if key_data:
             key_data["constrained_columns"] = constrained_columns
             key_data["referred_columns"] = referred_columns
             key_data["options"] = { k: v for k, v in [
@@ -409,7 +434,7 @@ class MonetDialect(default.DefaultDialect):
         return data
 
     def get_foreign_keys(self, connection: "Connection", table_name, schema=None, **kw):
-        data = self._get_foreign_keys(connection, [ table_name ], schema, temp=0, tabletypes=[0,1], **kw);
+        data = self._get_foreign_keys(connection, schema=schema, filter_names=[ table_name], temp=0, tabletypes=[0,1], **kw);
         return self._value_or_raise(data, table_name, schema)
 
     def get_multi_foreign_keys( self, connection, schema, filter_names, scope, kind, **kw):
@@ -427,7 +452,7 @@ class MonetDialect(default.DefaultDialect):
         tabletypes = []
         if not filter_names:
             filter_names = []
-            if temp == 1:
+            if temp == 1 and not(schema):
                 tabletypes.append(30);
                 if ObjectKind.TABLE in kind:
                     filter_names += self.get_temp_table_names(connection)
@@ -441,9 +466,9 @@ class MonetDialect(default.DefaultDialect):
             tabletypes.append(0);
         if temp == 0 and ObjectKind.VIEW in kind:
             tabletypes.append(1);
-        return self._get_foreign_keys(connection, filter_names, schema, temp=temp, tabletypes=tabletypes, **kw);
+        return self._get_foreign_keys(connection, schema=schema, filter_names=filter_names, temp=temp, tabletypes=tabletypes, **kw);
 
-    def get_indexes(self, connection: "Connection", table_name, schema=None, **kw):
+    def _get_indexes(self, connection: "Connection", filter_names=[], schema=None, temp=0, tabletypes=[0, 1], **kw):
         """
         ReflectedIndex list
             column_names: List[str | None],
@@ -456,85 +481,127 @@ class MonetDialect(default.DefaultDialect):
             unique: bool
         """
 
-        q = ""
-        args = {}
-        dc = """
-            SELECT k.name as ind, s.name sch, t.name tbl, kc.name col, 'UNIQUE' as tpe
-                    FROM sys.schemas s, sys._tables t, sys.objects kc, sys.keys k
-                WHERE kc.id = k.id
-                AND k.table_id = t.id
-                AND s.id = t.schema_id
-                AND t.system = FALSE
+        ischema = schema
+        idxs = defaultdict(list)
+        if len(tabletypes) == 0 or len(filter_names) == 0:
+            return idxs.items()
+        if temp == 1:
+            if not schema:
+                ischema = 'tmp'
+
+        print(ischema, temp, filter_names, tabletypes)
+        q = """ WITH it (id, idx) AS (VALUES (0, 'INDEX'), (1, 'JOININDEX'), (2, '2'), (3, '3'), (4, 'IMPRINTS INDEX'), (5, 'ORDERED INDEX')), --UNIQUE INDEX wraps to INDEX.
+        tbls (id, tbl, sch) AS (
+                SELECT t.id, t.name, s.name
+                FROM sys.schemas s, sys.tables t
+                where
+                    s.id = t.schema_id
+                    AND t.system = FALSE
+                    AND t.type in ( %s )
+                    AND s.name = %s
+                    AND t.name in ( %s )
+                    AND t.temporary = :temp),
+        indices( ind, col, tpe, knr, table_id ) AS (
+        SELECT  i.name ind, kc.name col, it.idx tpe, kc.nr knr, i.table_id table_id
+        FROM    sys.idxs AS i LEFT JOIN sys.keys AS k ON i.name = k.name, sys.objects kc, tbls t, it
+        WHERE   i.id = kc.id
+                AND k.type IS NULL 
+                AND i.type = it.id
+        UNION
+        SELECT  k.name ind, kc.name col, 'UNIQUE' tpe, kc.nr knr, k.table_id table_id
+        FROM    sys.keys k, sys.objects kc, tbls t
+        WHERE   k.id = kc.id
                 AND k.type = 1
-                AND s.name = :schema
-                AND t.name = :table
-            ORDER BY k.name, kc.nr
-        """
-        if schema:
-            q = """select ind, sch, tbl, col, tpe from sys.describe_indices where tbl = :table AND sch = :schema
-            union
-                select * from (
-                SELECT k.name as ind, s.name sch, t.name tbl, kc.name col, 'UNIQUE' as tpe
-                        FROM sys.schemas s, sys._tables t, sys.objects kc, sys.keys k
-                    WHERE kc.id = k.id
-                    AND k.table_id = t.id
-                    AND s.id = t.schema_id
-                    AND t.system = FALSE
-                    AND k.type = 1
-                    AND s.name = :schema
-                    AND t.name = :table
-                ORDER BY k.name, kc.nr
-                ) as b
-            """ 
-            args = {"table": table_name, "schema": schema }
-        else:
-            q = """select ind, sch, tbl, col, tpe from sys.describe_indices where tbl = :table AND sch = CURRENT_SCHEMA
-            union
-                select * from (
-                SELECT k.name as ind, s.name sch, t.name tbl, kc.name col, 'UNIQUE' as tpe
-                    FROM sys.schemas s, sys._tables t, sys.objects kc, sys.keys k
-                    WHERE kc.id = k.id
-                    AND k.table_id = t.id
-                    AND s.id = t.schema_id
-                    AND t.system = FALSE
-                    AND k.type = 1
-                    AND s.name = CURRENT_SCHEMA
-                    AND t.name = :table
-                ORDER BY k.name, kc.nr
-                ) as b
-            """
-            args = {"table": table_name }
+        )
+        select ind, sch, tbl, col, tpe, knr
+        from tbls t LEFT OUTER JOIN indices i
+        on i.table_id = t.id
+        ORDER BY tbl, ind, tpe, knr;
+        """ % ((", ".join(str(tt) for tt in tabletypes)), quote(ischema) if ischema else 'CURRENT_SCHEMA', ", ".join(quote(table_name) for table_name in filter_names))
+        args = {"temp": temp}
         c = connection.execute(text(q), args)
+        print(q)
 
         index_data = None
         column_names = []
         last_name = None
+        table_name = None
+        cnt = 0
 
-        idxs = defaultdict(list)
-        results = idxs[(schema,table_name)] 
         for row in c:
-            if last_name is not None and last_name != row.ind:
-                index_data["column_names"] = column_names
-                results.append(index_data)
+            print(row)
+            if cnt and (last_name != row.ind or row.ind is None):
+                if index_data:
+                    index_data["column_names"] = column_names
+                    results.append(index_data)
+                index_data = None
                 column_names = []
+                if table_name != row.tbl:
+                    table_name = row.tbl
+                    results = idxs[(schema,table_name)] 
 
-            if last_name is None or last_name != row.ind:
-                index_data = {
-                    "name": row.ind,
-                    "unique": True if row.tpe == 'UNIQUE' else False,
-                    "include_columns": [],
-                    "dialect_options": {},
-                }
+            if table_name is None or last_name != row.ind:
+                if row.ind:
+                    index_data = {
+                        "name": row.ind,
+                        "unique": True if row.tpe == 'UNIQUE' else False,
+                        "include_columns": [],
+                        "dialect_options": {},
+                    }
+                table_name = row.tbl
+                results = idxs[(schema,table_name)] 
 
             last_name = row.ind
-            column_names.append(row.col)
+            cnt += 1;
+            if row.ind:
+                column_names.append(row.col)
 
         if index_data:
             index_data["column_names"] = column_names
             results.append(index_data)
 
         data = idxs.items()
+        print(data)
+        return data
+
+    def get_indexes(self, connection: "Connection", table_name, schema=None, **kw):
+        data = self._get_indexes(connection, [ table_name ], schema, temp=0, tabletypes=[0,1], **kw)
         return self._value_or_raise(data, table_name, schema)
+
+    def get_multi_indexes(
+        self, connection, schema, filter_names, scope, kind, **kw
+    ):
+        if scope is ObjectScope.ANY:
+            default_data = self.get_multi_indexes(connection, schema, filter_names, ObjectScope.DEFAULT, kind, **kw);
+            temp_data = self.get_multi_indexes(connection, schema, filter_names, ObjectScope.TEMPORARY, kind, **kw);
+            data = dict(default_data)
+            data.update(temp_data)
+            return data
+        temp = 0;
+        if scope is ObjectScope.DEFAULT:
+            temp = 0;
+        elif scope is ObjectScope.TEMPORARY:
+            temp = 1;
+        tabletypes = []
+        if not filter_names:
+            filter_names = []
+            if temp == 1 and not(schema):
+                tabletypes.append(30);
+                if ObjectKind.TABLE in kind:
+                    filter_names += self.get_temp_table_names(connection)
+            else:
+                if ObjectKind.TABLE in kind:
+                    filter_names += self.get_table_names(connection, schema)
+                    print(filter_names);
+                if ObjectKind.VIEW in kind:
+                    filter_names += self.get_view_names(connection, schema)
+                    print(filter_names);
+
+        if temp == 0 and ObjectKind.TABLE in kind:
+            tabletypes.append(0);
+        if temp == 0 and ObjectKind.VIEW in kind:
+            tabletypes.append(1);
+        return self._get_indexes(connection, filter_names, schema, temp=temp, tabletypes=tabletypes, **kw)
 
     def do_commit(self, connection):
         if not(connection.autocommit):
@@ -651,17 +718,18 @@ class MonetDialect(default.DefaultDialect):
         .. versionadded:: 0.9.0
 
         """
+
         q = """
-        SELECT "objects"."name" AS col, keys.name AS name
-                 FROM "sys"."keys" AS "keys",
-                         "sys"."objects" AS "objects",
-                         "sys"."tables" AS "tables",
-                         "sys"."schemas" AS "schemas"
-                 WHERE "keys"."id" = "objects"."id"
-                         AND "keys"."table_id" = "tables"."id"
-                         AND "tables"."schema_id" = "schemas"."id"
-                         AND "keys"."type" = 1
-                         AND "tables"."id" = :table_id
+        SELECT o.name col, k.name name
+                 FROM sys.keys k,
+                         sys.objects o,
+                         sys.tables t,
+                         sys.schemas s
+                 WHERE k.id = o.id
+                         AND k.table_id = t.id
+                         AND t.schema_id = s.id
+                         AND k.type = 1
+                         AND t.id = :table_id
         """
         args = {"table_id": self._table_id(connection, table_name, schema)}
         c = connection.execute(text(q), args)

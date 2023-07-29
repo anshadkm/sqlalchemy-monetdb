@@ -92,7 +92,6 @@ class MonetDDLCompiler(compiler.DDLCompiler):
 
         return text
 
-
 class MonetTypeCompiler(compiler.GenericTypeCompiler):
     def visit_DOUBLE_PRECISION(self, type_):
         return "DOUBLE PRECISION"
