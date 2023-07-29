@@ -489,7 +489,6 @@ ORDER BY fk_t, fk, o;
             if not schema:
                 ischema = 'tmp'
 
-        print(ischema, temp, filter_names, tabletypes)
         q = """ WITH it (id, idx) AS (VALUES (0, 'INDEX'), (1, 'JOININDEX'), (2, '2'), (3, '3'), (4, 'IMPRINTS INDEX'), (5, 'ORDERED INDEX')), --UNIQUE INDEX wraps to INDEX.
         tbls (id, tbl, sch) AS (
                 SELECT t.id, t.name, s.name
@@ -520,7 +519,6 @@ ORDER BY fk_t, fk, o;
         """ % ((", ".join(str(tt) for tt in tabletypes)), quote(ischema) if ischema else 'CURRENT_SCHEMA', ", ".join(quote(table_name) for table_name in filter_names))
         args = {"temp": temp}
         c = connection.execute(text(q), args)
-        print(q)
 
         index_data = None
         column_names = []
@@ -529,7 +527,6 @@ ORDER BY fk_t, fk, o;
         cnt = 0
 
         for row in c:
-            print(row)
             if cnt and (last_name != row.ind or row.ind is None):
                 if index_data:
                     index_data["column_names"] = column_names
@@ -561,7 +558,6 @@ ORDER BY fk_t, fk, o;
             results.append(index_data)
 
         data = idxs.items()
-        print(data)
         return data
 
     def get_indexes(self, connection: "Connection", table_name, schema=None, **kw):
@@ -592,10 +588,8 @@ ORDER BY fk_t, fk, o;
             else:
                 if ObjectKind.TABLE in kind:
                     filter_names += self.get_table_names(connection, schema)
-                    print(filter_names);
                 if ObjectKind.VIEW in kind:
                     filter_names += self.get_view_names(connection, schema)
-                    print(filter_names);
 
         if temp == 0 and ObjectKind.TABLE in kind:
             tabletypes.append(0);
