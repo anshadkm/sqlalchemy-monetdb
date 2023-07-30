@@ -90,13 +90,23 @@ class MonetDialect(default.DefaultDialect):
         rs = con.execute(text(s))
         return [row[0] for row in rs]
 
+    @reflection.cache
     def has_table(self, connection: "Connection", table_name, schema=None, **kw):
-        # seems like case gets folded in pg_class...
+        print(table_name, schema)
         if schema is None:
             cursor = connection.execute(
+                #text(
+                #    "select name from sys.tables where system = false and type = 0 and name = :name"
+                #), {'name': table_name})
                 text(
-                    "select name from sys.tables where system = false and type = 0 and name = :name"
-                ), {'name': table_name})
+                    "SELECT tables.name "
+                    "FROM sys.tables, sys.schemas "
+                    "WHERE tables.system = FALSE "
+                    "AND tables.schema_id = schemas.id "
+                    "AND type in ( 0, 1) "
+                    "AND tables.name = :name "
+                    "AND schemas.name = CURRENT_SCHEMA",
+                    ), {'name': table_name})
 
         else:
             cursor = connection.execute(
@@ -105,12 +115,15 @@ class MonetDialect(default.DefaultDialect):
                     "FROM sys.tables, sys.schemas "
                     "WHERE tables.system = FALSE "
                     "AND tables.schema_id = schemas.id "
-                    "AND type = 0 "
+                    "AND type in ( 0, 1 ) "
                     "AND tables.name = :name "
                     "AND schemas.name = :schema",
                     ), {'name': table_name, 'schema': schema})
 
-        return bool(cursor.first())
+        res = cursor.fetchall()
+        print(res, bool(res))
+        #return bool(cursor.first())
+        return bool(res)
 
     def has_sequence(self, connection: "Connection", sequence_name, schema=None, **kw):
         q = """
