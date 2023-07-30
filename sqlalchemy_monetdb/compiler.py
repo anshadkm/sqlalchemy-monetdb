@@ -1,5 +1,5 @@
 from sqlalchemy import types as sqltypes, schema, util
-from sqlalchemy.sql import compiler
+from sqlalchemy.sql import compiler, operators
 import re
 
 FK_ON_DELETE = re.compile(
@@ -174,4 +174,37 @@ class MonetCompiler(compiler.SQLCompiler):
         return "FROM " + ', '.join(t._compiler_dispatch(self, asfrom=True,
                                                         fromhints=from_hints, **kw)
                                    for t in extra_froms)
+
+    def visit_empty_set_op_expr(self, type_, expand_op, **kw):
+        if expand_op is operators.not_in_op:
+            if len(type_) > 1:
+                return "(%s)) OR (1 = 1" % (
+                    ", ".join("NULL" for element in type_)
+                )
+            else:
+                return "NULL) OR (1 = 1"
+        elif expand_op is operators.in_op:
+            if len(type_) > 1:
+                return "(%s)) AND (1 <> 1" % (
+                    ", ".join("NULL" for element in type_)
+                )
+            else:
+                return "NULL) AND (1 <> 1"
+        else:
+            return self.visit_empty_set_expr(type_)
+
+    def visit_empty_set_expr(self, element_types, **kw):
+        # cast the empty set to the type we are comparing against.  if
+        # we are comparing against the null type, pick an arbitrary
+        # datatype for the empty set
+        return "SELECT %s WHERE 1<>1" % (
+            ", ".join(
+                "CAST(NULL AS %s)"
+                % self.dialect.type_compiler_instance.process(
+                    INTEGER() if type_._isnull else type_
+                )
+                for type_ in element_types or [INTEGER()]
+            ),
+        )
+
 

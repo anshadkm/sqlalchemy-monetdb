@@ -137,7 +137,7 @@ class MonetDialect(default.DefaultDialect):
 
         q = "SELECT name FROM sys.sequences"
         if schema:
-            q += " AND schema_id = :schema_id"
+            q += " where schema_id = :schema_id"
         args = {
             "schema_id": self._schema_id(connection, schema)
         }

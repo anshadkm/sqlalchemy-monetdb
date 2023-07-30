@@ -193,7 +193,7 @@ class Requirements(SuiteRequirements):
         creates an additional subquery.
 
         """
-        return exclusions.open()
+        return exclusions.closed()
 
     @property
     def boolean_col_expressions(self):
@@ -1172,6 +1172,18 @@ class Requirements(SuiteRequirements):
         return exclusions.closed()
 
     @property
+    def unusual_column_name_characters(self):
+        """target database allows column names that have unusual characters
+        in them, such as dots, spaces, slashes, or percent signs.
+
+        The column names are as always in such a case quoted, however the
+        DB still needs to support those characters in the name somehow.
+
+        """
+        """ Because python currently handles the %* parameters ! """
+        return exclusions.closed()
+
+    @property
     def order_by_col_from_union(self):
         """target database supports ordering by a column from a SELECT
         inside of a UNION
@@ -1461,7 +1473,8 @@ class Requirements(SuiteRequirements):
     def supports_distinct_on(self):
         """If a backend supports the DISTINCT ON in a select"""
         # NOTE: this SQL syntax is supported by MonetDB 
-        return exclusions.open()
+        # test set of sqlalchemy is broken!!
+        return exclusions.closed()
 
     @property
     def supports_is_distinct_from(self):
