@@ -131,6 +131,7 @@ class MonetCompiler(compiler.SQLCompiler):
               % self.dialect.identifier_preparer.format_sequence(seq)
         return exc
 
+    """
     def limit_clause(self, select, **kw):
         text = ""
         if select._limit is not None:
@@ -138,6 +139,15 @@ class MonetCompiler(compiler.SQLCompiler):
         if select._offset is not None:
             text += " OFFSET " + str(select._offset)
         return text
+    """
+    def limit_clause(self, select, **kw):
+        text = ""
+        if select._limit_clause is not None:
+            text += "\n LIMIT " + self.process(select._limit_clause, **kw)
+        if select._offset_clause is not None:
+            text += " OFFSET " + self.process(select._offset_clause, **kw)
+        return text
+
 
     def visit_extended_join(self, join, asfrom=False, **kwargs):
         """Support for full outer join, created by

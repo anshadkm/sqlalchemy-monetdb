@@ -92,12 +92,8 @@ class MonetDialect(default.DefaultDialect):
 
     @reflection.cache
     def has_table(self, connection: "Connection", table_name, schema=None, **kw):
-        print(table_name, schema)
         if schema is None:
             cursor = connection.execute(
-                #text(
-                #    "select name from sys.tables where system = false and type = 0 and name = :name"
-                #), {'name': table_name})
                 text(
                     "SELECT tables.name "
                     "FROM sys.tables, sys.schemas "
@@ -121,23 +117,19 @@ class MonetDialect(default.DefaultDialect):
                     ), {'name': table_name, 'schema': schema})
 
         res = cursor.fetchall()
-        print(res, bool(res))
-        #return bool(cursor.first())
         return bool(res)
 
+    @reflection.cache
     def has_sequence(self, connection: "Connection", sequence_name, schema=None, **kw):
-        q = """
-            SELECT id
-            FROM sys.sequences
-            WHERE name = :name
-            AND schema_id = :schema_id
-        """
-        args = {
-            "name": sequence_name,
-            "schema_id": self._schema_id(connection, schema)
-        }
+        if schema is None:
+            q = """ SELECT id FROM sys.sequences WHERE name = :name AND schema_id = (select id from schemas where name = CURRENT_SCHEMA) """
+            args = { "name": sequence_name }
+        else:
+            q = """ SELECT id FROM sys.sequences WHERE name = :name AND schema_id = (select id from schemas where name = :schema) """
+            args = { "name": sequence_name, "schema": schema }
         cursor = connection.execute(text(q), args)
-        return bool(cursor.first())
+        res = cursor.fetchall()
+        return bool(res)
 
     def get_sequence_names(self, connection: "Connection", schema: Optional[str] = None, **kw):
         """Return a list of all sequence names available in the database.
@@ -150,12 +142,14 @@ class MonetDialect(default.DefaultDialect):
 
         q = "SELECT name FROM sys.sequences"
         if schema:
-            q += " where schema_id = :schema_id"
-        args = {
-            "schema_id": self._schema_id(connection, schema)
-        }
-        cursor = connection.execute(text(q), args)
-        return cursor.fetchall()
+            q += " where schema_id = (select id from schemas where name = :schema)"
+            args = { "schema": schema }
+        else:
+            q += " where schema_id = (select id from schemas where name = CURRENT_SCHEMA)"
+            args = {}
+        c = connection.execute(text(q), args)
+        names = [row[0] for row in c]
+        return names
 
     @reflection.cache
     def _schema_id(self, con: "Connection", schema_name):

@@ -165,7 +165,6 @@ class Requirements(SuiteRequirements):
         parameter
         """
         # NOTE: we are getting syntax error in: “select * from t offset 1+” 
-
         return exclusions.closed()
 
     @property
