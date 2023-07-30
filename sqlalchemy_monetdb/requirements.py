@@ -670,7 +670,7 @@ class Requirements(SuiteRequirements):
     @property
     def temp_table_names(self):
         """target dialect supports listing of temporary table names"""
-        return exclusions.open()
+        return exclusions.closed()
 
     @property
     def temporary_tables(self):
@@ -1117,7 +1117,7 @@ class Requirements(SuiteRequirements):
         """Target database must support savepoints."""
         # TODO: MonetDB supports SAVEPOINT. let's see if pymonetdb is ok
         return exclusions.open()
-        #return exclusions.close()
+        #return exclusions.closed()
 
     @property
     def two_phase_transactions(self):
@@ -1169,7 +1169,7 @@ class Requirements(SuiteRequirements):
         """
         # NOTE: We allow that when using double quotes (")
         # TODO: Make sure the dialect is handling that correctly
-        return exclusions.open()
+        return exclusions.closed()
 
     @property
     def order_by_col_from_union(self):

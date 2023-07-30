@@ -632,7 +632,14 @@ ORDER BY fk_t, fk, o;
             "name": view_name,
             "schema_id": self._schema_id(connection, schema)
         }
-        return connection.execute(text(q), args)
+        c = connection.execute(text(q), args)
+        res = c.fetchall()
+        if res is None or len(res) <= 0:
+            raise exc.NoSuchTableError(
+                f"{schema}.{view_name}" if schema else view_name
+            )
+        else:
+            return res
 
     def get_view_names(self, connection: "Connection", schema=None, **kw):
         """Return a list of all view names available in the database.
@@ -724,18 +731,18 @@ ORDER BY fk_t, fk, o;
                          AND t.schema_id = s.id
                          AND k.type = 1
                          AND t.id = :table_id
+                order by name, o.nr
         """
         args = {"table_id": self._table_id(connection, table_name, schema)}
         c = connection.execute(text(q), args)
         table = c.fetchall()
 
-        from collections import defaultdict
-
         col_dict = defaultdict(list)
         for col, name in table:
             col_dict[name].append(col)
 
-        return [{'name': n, 'column_names': c} for n, c in col_dict.items()]
+        res = [{'column_names': c, 'name': n} for n, c in col_dict.items()]
+        return res
 
     def get_check_constraints(self, connection, table_name, schema=None, **kw):
         return []
