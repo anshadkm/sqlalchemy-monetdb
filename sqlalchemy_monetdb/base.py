@@ -50,8 +50,23 @@ class MonetExecutionContext(default.DefaultExecutionContext):
 
 class MonetIdentifierPreparer(compiler.IdentifierPreparer):
     reserved_words = RESERVED_WORDS
+    illegal_initial_characters = {str(dig) for dig in range(0, 10)}.union(
+        ["_", "$"]
+    )
 
     def __init__(self, *args, **kwargs):
         super(MonetIdentifierPreparer, self).__init__(*args, **kwargs)
 
         self._double_percents = False
+    
+    def _bindparam_requires_quotes(self, value):
+        """Return True if the given identifier requires quoting."""
+        lc_value = value.lower()
+        if value[0] == '"' and value[-1] == '"':
+            return False
+        return (
+            lc_value in self.reserved_words
+            or value[0] in self.illegal_initial_characters
+            or not self.legal_characters.match(str(value))
+        )
+

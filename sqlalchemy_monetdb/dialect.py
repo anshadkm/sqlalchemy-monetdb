@@ -54,7 +54,7 @@ class MonetDialect(default.DefaultDialect):
     execution_ctx_cls = MonetExecutionContext
     preparer = MonetIdentifierPreparer
     type_compiler = MonetTypeCompiler
-    default_paramstyle = 'pyformat'
+    default_paramstyle = 'named'
 
     def __init__(self, **kwargs):
         default.DefaultDialect.__init__(self, **kwargs)
@@ -213,7 +213,7 @@ class MonetDialect(default.DefaultDialect):
                         AND t.temporary = :temp
                         AND t.type in ( %s )
                         AND s.name = :schema                                                                                                                                             
-                ORDER BY c.number;   
+                ORDER BY c.number   
                 """ % (", ".join(str(tt) for tt in tabletypes))
             args = {"table": table_name, "schema": ischema, "temp": temp}
           else:
@@ -225,7 +225,7 @@ class MonetDialect(default.DefaultDialect):
                         AND t.temporary = :temp
                         AND t.type in ( %s )
                         AND s.name = CURRENT_SCHEMA
-                ORDER BY c.number;   
+                ORDER BY c.number   
                 """ % (", ".join(str(tt) for tt in tabletypes))
             args = {"table": table_name, "temp": temp}
           c = connection.execute(text(q), args)
@@ -250,48 +250,57 @@ class MonetDialect(default.DefaultDialect):
 
             # monetdb translates an AUTO INCREMENT into a sequence
             autoincrement = False
-            if row.cdefault is not None:
+            cdefault = row.cdefault
+            identity = None
+            if cdefault is not None:
                 r = r"""next value for \"(\w*)\"\.\"(\w*)"$"""
-                match = re.search(r, row.cdefault)
+                match = re.search(r, cdefault)
                 if match is not None:
                     seq_schema = match.group(1)
                     seq = match.group(2)
                     autoincrement = True
+                    cdefault = None
+                    # todo handle identity options
+                    # ie join somehow with sequences 
+                    identity = { 'start': '0' }
+                    print(seq_schema, seq, autoincrement)
 
             column = {
                 "name": name,
                 "type": col_type,
-                "default": row.cdefault,
+                "default": cdefault,
                 "autoincrement": autoincrement,
                 "nullable": row.null,
             }
+            if identity is not None:
+                column["identity"] = identity
 
             result.append(column)
         return columns.items()
 
     def get_columns(self, connection: "Connection", table_name, schema=None, **kw):
-        data = self._get_columns(connection, [ table_name ], schema, temp=0, tabletypes=[0,1],  **kw);
+        data = self._get_columns(connection, [ table_name ], schema, temp=0, tabletypes=[0,1],  **kw)
         return self._value_or_raise(data, table_name, schema)                                                                                                                               
     
     def get_multi_columns(
         self, connection, schema, filter_names, scope, kind, **kw
     ):
         if scope is ObjectScope.ANY:
-            default_data = self.get_multi_columns(connection, schema, filter_names, ObjectScope.DEFAULT, kind, **kw);
-            temp_data = self.get_multi_columns(connection, schema, filter_names, ObjectScope.TEMPORARY, kind, **kw);
+            default_data = self.get_multi_columns(connection, schema, filter_names, ObjectScope.DEFAULT, kind, **kw)
+            temp_data = self.get_multi_columns(connection, schema, filter_names, ObjectScope.TEMPORARY, kind, **kw)
             data = dict(default_data)
             data.update(temp_data)
             return data
-        temp = 0;
+        temp = 0
         if scope is ObjectScope.DEFAULT:
-            temp = 0;
+            temp = 0
         elif scope is ObjectScope.TEMPORARY:
-            temp = 1;
+            temp = 1
         tabletypes = []
         if not filter_names:
             filter_names = []
             if temp == 1 and not(schema):
-                tabletypes.append(30);
+                tabletypes.append(30)
                 if ObjectKind.TABLE in kind:
                     filter_names += self.get_temp_table_names(connection)
             else:
@@ -301,10 +310,10 @@ class MonetDialect(default.DefaultDialect):
                     filter_names += self.get_view_names(connection, schema)
 
         if temp == 0 and ObjectKind.TABLE in kind:
-            tabletypes.append(0);
+            tabletypes.append(0)
         if temp == 0 and ObjectKind.VIEW in kind:
-            tabletypes.append(1);
-        return self._get_columns(connection, filter_names, schema, temp=temp, tabletypes=tabletypes, **kw);
+            tabletypes.append(1)
+        return self._get_columns(connection, filter_names, schema, temp=temp, tabletypes=tabletypes, **kw)
 
     def _value_or_raise(self, data, table, schema):
         try:
@@ -368,7 +377,7 @@ class MonetDialect(default.DefaultDialect):
                 AND (fkk."action" & 255)         = od.id
                 AND ((fkk."action" >> 8) & 255)  = ou.id ) as fk
         on f.id = fk.fktid
-ORDER BY fk_t, fk, o;
+ORDER BY fk_t, fk, o
         """ % ((", ".join(str(tt) for tt in tabletypes)), quote(ischema) if ischema else 'CURRENT_SCHEMA', ", ".join(quote(table_name) for table_name in filter_names))
         args = {"temp": temp}
         c = connection.execute(text(q), args)
@@ -418,7 +427,7 @@ ORDER BY fk_t, fk, o;
                 results = fkeys[(schema,table_name)] 
 
             last_name = row.fk
-            cnt += 1;
+            cnt += 1
             if row.fk:
                 constrained_columns.append(row.fk_c)
                 referred_columns.append(row.pk_c)
@@ -441,26 +450,26 @@ ORDER BY fk_t, fk, o;
         return data
 
     def get_foreign_keys(self, connection: "Connection", table_name, schema=None, **kw):
-        data = self._get_foreign_keys(connection, schema=schema, filter_names=[ table_name], temp=0, tabletypes=[0,1], **kw);
+        data = self._get_foreign_keys(connection, schema=schema, filter_names=[ table_name], temp=0, tabletypes=[0,1], **kw)
         return self._value_or_raise(data, table_name, schema)
 
     def get_multi_foreign_keys( self, connection, schema, filter_names, scope, kind, **kw):
         if scope is ObjectScope.ANY:
-            default_data = self.get_multi_foreign_keys(connection, schema, filter_names, ObjectScope.DEFAULT, kind, **kw);
-            temp_data = self.get_multi_foreign_keys(connection, schema, filter_names, ObjectScope.TEMPORARY, kind, **kw);
+            default_data = self.get_multi_foreign_keys(connection, schema, filter_names, ObjectScope.DEFAULT, kind, **kw)
+            temp_data = self.get_multi_foreign_keys(connection, schema, filter_names, ObjectScope.TEMPORARY, kind, **kw)
             data = dict(default_data)
             data.update(temp_data)
             return data
-        temp = 0;
+        temp = 0
         if scope is ObjectScope.DEFAULT:
-            temp = 0;
+            temp = 0
         elif scope is ObjectScope.TEMPORARY:
-            temp = 1;
+            temp = 1
         tabletypes = []
         if not filter_names:
             filter_names = []
             if temp == 1 and not(schema):
-                tabletypes.append(30);
+                tabletypes.append(30)
                 if ObjectKind.TABLE in kind:
                     filter_names += self.get_temp_table_names(connection)
             else:
@@ -470,10 +479,10 @@ ORDER BY fk_t, fk, o;
                     filter_names += self.get_view_names(connection, schema)
 
         if temp == 0 and ObjectKind.TABLE in kind:
-            tabletypes.append(0);
+            tabletypes.append(0)
         if temp == 0 and ObjectKind.VIEW in kind:
-            tabletypes.append(1);
-        return self._get_foreign_keys(connection, schema=schema, filter_names=filter_names, temp=temp, tabletypes=tabletypes, **kw);
+            tabletypes.append(1)
+        return self._get_foreign_keys(connection, schema=schema, filter_names=filter_names, temp=temp, tabletypes=tabletypes, **kw)
 
     def _get_indexes(self, connection: "Connection", filter_names=[], schema=None, temp=0, tabletypes=[0, 1], **kw):
         """
@@ -522,7 +531,7 @@ ORDER BY fk_t, fk, o;
         select ind, sch, tbl, col, tpe, knr
         from tbls t LEFT OUTER JOIN indices i
         on i.table_id = t.id
-        ORDER BY tbl, ind, tpe, knr;
+        ORDER BY tbl, ind, tpe, knr
         """ % ((", ".join(str(tt) for tt in tabletypes)), quote(ischema) if ischema else 'CURRENT_SCHEMA', ", ".join(quote(table_name) for table_name in filter_names))
         args = {"temp": temp}
         c = connection.execute(text(q), args)
@@ -556,7 +565,7 @@ ORDER BY fk_t, fk, o;
                 results = idxs[(schema,table_name)] 
 
             last_name = row.ind
-            cnt += 1;
+            cnt += 1
             if row.ind:
                 column_names.append(row.col)
 
@@ -575,21 +584,21 @@ ORDER BY fk_t, fk, o;
         self, connection, schema, filter_names, scope, kind, **kw
     ):
         if scope is ObjectScope.ANY:
-            default_data = self.get_multi_indexes(connection, schema, filter_names, ObjectScope.DEFAULT, kind, **kw);
-            temp_data = self.get_multi_indexes(connection, schema, filter_names, ObjectScope.TEMPORARY, kind, **kw);
+            default_data = self.get_multi_indexes(connection, schema, filter_names, ObjectScope.DEFAULT, kind, **kw)
+            temp_data = self.get_multi_indexes(connection, schema, filter_names, ObjectScope.TEMPORARY, kind, **kw)
             data = dict(default_data)
             data.update(temp_data)
             return data
-        temp = 0;
+        temp = 0
         if scope is ObjectScope.DEFAULT:
-            temp = 0;
+            temp = 0
         elif scope is ObjectScope.TEMPORARY:
-            temp = 1;
+            temp = 1
         tabletypes = []
         if not filter_names:
             filter_names = []
             if temp == 1 and not(schema):
-                tabletypes.append(30);
+                tabletypes.append(30)
                 if ObjectKind.TABLE in kind:
                     filter_names += self.get_temp_table_names(connection)
             else:
@@ -599,9 +608,9 @@ ORDER BY fk_t, fk, o;
                     filter_names += self.get_view_names(connection, schema)
 
         if temp == 0 and ObjectKind.TABLE in kind:
-            tabletypes.append(0);
+            tabletypes.append(0)
         if temp == 0 and ObjectKind.VIEW in kind:
-            tabletypes.append(1);
+            tabletypes.append(1)
         return self._get_indexes(connection, filter_names, schema, temp=temp, tabletypes=tabletypes, **kw)
 
     def do_commit(self, connection):

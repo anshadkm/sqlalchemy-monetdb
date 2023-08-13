@@ -33,11 +33,21 @@ class MonetDDLCompiler(compiler.DDLCompiler):
         )
         return text
 
+    def visit_identity_column(self, identity, **kw):
+        text = "GENERATED %s AS IDENTITY" % (
+            "ALWAYS",# if identity.always else "BY DEFAULT",
+        )
+        options = self.get_identity_options(identity)
+        if options:
+            text += " (%s)" % options
+        return text
+
     def get_column_specification(self, column, **kwargs):
         colspec = self.preparer.format_column(column)
         impl_type = column.type.dialect_impl(self.dialect)
         if column.primary_key and \
             column is column.table._autoincrement_column and \
+            column.identity is None and \
             not isinstance(impl_type, sqltypes.SmallInteger) and \
             (
                 column.default is None or
@@ -51,6 +61,9 @@ class MonetDDLCompiler(compiler.DDLCompiler):
             default = self.get_column_default_string(column)
             if default is not None:
                 colspec += " DEFAULT " + default
+
+        if column.identity:
+            colspec += " " + self.process(column.identity)
 
         if not column.nullable:
             colspec += " NOT NULL"
@@ -123,6 +136,56 @@ class MonetTypeCompiler(compiler.GenericTypeCompiler):
 
 
 class MonetCompiler(compiler.SQLCompiler):
+
+    # MonetDB only allowes simple names (strings) as parameters names 
+    # Some remapping is done here
+    bindname_escape_characters = util.immutabledict(
+        {
+            "%": "P",
+            "(": "A",
+            ")": "Z",
+            ":": "C",
+            ".": "C",
+            "[": "C",
+            "]": "C",
+            " ": "C",
+            "\\": "C",
+            "/": "C",
+            "?": "C",
+        }
+    )
+
+    def bindparam_string(self, name, **kw):
+        if (
+            self.preparer._bindparam_requires_quotes(name)
+            and not kw.get("post_compile", False)
+        ):
+            new_name = name
+            if name[0] == '%':
+                new_name = '_' + name
+            quoted_name = '"%s"' % new_name
+            kw["escaped_from"] = name
+            name = quoted_name
+            return compiler.SQLCompiler.bindparam_string(self, name, **kw)
+
+        escaped_from = kw.get("escaped_from", None)
+        if not escaped_from:
+            if self._bind_translate_re.search(name):
+                new_name = self._bind_translate_re.sub(
+                    lambda m: self._bind_translate_chars[m.group(0)],
+                    name,
+                )
+                if new_name[0].isdigit() or new_name[0] == "_" or new_name[0] == '%':
+                    new_name = "D" + new_name
+                kw["escaped_from"] = name
+                name = new_name
+            elif name[0].isdigit() or name[0] == "_" or name[0] == '%':
+                new_name = "D" + name
+                kw["escaped_from"] = name
+                name = new_name
+
+        return compiler.SQLCompiler.bindparam_string(self, name, **kw)
+
     def visit_mod(self, binary, **kw):
         return self.process(binary.left) + " %% " + self.process(binary.right)
 
@@ -216,5 +279,59 @@ class MonetCompiler(compiler.SQLCompiler):
                 for type_ in element_types or [INTEGER()]
             ),
         )
+
+    def visit_like_op_binary(self, binary, operator, **kw):
+        escape = binary.modifiers.get("escape", None)
+
+        res = "%s LIKE %s" % (
+            binary.left._compiler_dispatch(self, **kw),
+            binary.right._compiler_dispatch(self, **kw),
+        ) + (
+            " ESCAPE " + self.render_literal_value(escape, sqltypes.STRINGTYPE)
+            if escape is not None
+            else ""
+        )
+
+        return res
+
+    def _regexp_match(self, base_op, binary, operator, kw):
+        flags = binary.modifiers["flags"]
+        if flags is None:
+            return self._generate_generic_binary(
+                binary, " %s " % base_op, **kw
+            )
+        if flags == "i":
+            return self._generate_generic_binary(
+                binary, " %s* " % base_op, **kw
+            )
+        return "%s %s CONCAT('(?', %s, ')', %s)" % (
+            self.process(binary.left, **kw),
+            base_op,
+            self.render_literal_value(flags, sqltypes.STRINGTYPE),
+            self.process(binary.right, **kw),
+        )
+
+    def visit_regexp_match_op_binary(self, binary, operator, **kw):
+        return self._regexp_match("~", binary, operator, kw)
+
+    def visit_not_regexp_match_op_binary(self, binary, operator, **kw):
+        return self._regexp_match("!~", binary, operator, kw)
+
+    def visit_regexp_replace_op_binary(self, binary, operator, **kw):
+        string = self.process(binary.left, **kw)
+        pattern_replace = self.process(binary.right, **kw)
+        flags = binary.modifiers["flags"]
+        if flags is None:
+            return "REGEXP_REPLACE(%s, %s)" % (
+                string,
+                pattern_replace,
+            )
+        else:
+            return "REGEXP_REPLACE(%s, %s, %s)" % (
+                string,
+                pattern_replace,
+                self.render_literal_value(flags, sqltypes.STRINGTYPE),
+            )
+
 
 
