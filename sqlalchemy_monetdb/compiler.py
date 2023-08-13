@@ -1,5 +1,6 @@
 from sqlalchemy import types as sqltypes, schema, util
 from sqlalchemy.sql import compiler, operators
+from .monetdb_types import TIME as TIME
 import re
 
 FK_ON_DELETE = re.compile(
@@ -129,10 +130,27 @@ class MonetTypeCompiler(compiler.GenericTypeCompiler):
             return "TIMESTAMP WITH TIME ZONE"
         return "TIMESTAMP"
 
+    def visit_TIME(self, type_, **kw):
+        return "TIME%s %s" % (
+            "(%d)" % type_.precision
+            if getattr(type_, "precision", None) is not None
+            else "(6)",
+            (type_.timezone and "WITH" or "WITHOUT") + " TIME ZONE",
+        )
+
     def visit_VARCHAR(self, type_, **kwargs):
         if type_.length is None:
             return "CLOB"
         return compiler.GenericTypeCompiler.visit_VARCHAR(self, type_)
+
+    def visit_uuid(self, type_, **kw):
+        if type_.native_uuid:
+            return self.visit_UUID(type_, **kw)
+        else:
+            return super().visit_uuid(type_, **kw)
+
+    def visit_UUID(self, type_, **kw):
+        return "UUID"
 
 
 class MonetCompiler(compiler.SQLCompiler):

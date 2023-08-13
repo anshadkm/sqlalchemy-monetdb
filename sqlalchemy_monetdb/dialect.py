@@ -15,6 +15,7 @@ from sqlalchemy_monetdb.base import MonetExecutionContext, \
 from sqlalchemy_monetdb.compiler import MonetDDLCompiler, MonetTypeCompiler, \
     MonetCompiler
 from sqlalchemy_monetdb.monetdb_types import MONETDB_TYPE_MAP
+from .monetdb_types import TIME
 
 if typing.TYPE_CHECKING:
     from sqlalchemy.engine.base import Connection
@@ -41,6 +42,7 @@ class MonetDialect(default.DefaultDialect):
     supports_sequences = True
     sequences_optional = True
     supports_native_decimal = True
+    supports_native_uuid = True
     supports_default_values = True
     supports_native_boolean = True
     supports_multivalues_insert = True
