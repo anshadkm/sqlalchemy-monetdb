@@ -16,7 +16,9 @@ from sqlalchemy_monetdb.compiler import MonetDDLCompiler, MonetTypeCompiler, \
     MonetCompiler
 from sqlalchemy_monetdb.monetdb_types import MONETDB_TYPE_MAP
 from .monetdb_types import TIME
+import pymonetdb
 
+pymonetdb.paramstyle = 'named'
 if typing.TYPE_CHECKING:
     from sqlalchemy.engine.base import Connection
 
