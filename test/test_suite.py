@@ -3,20 +3,6 @@ from sqlalchemy.testing.suite import *
 
 # Failures
 
-class DifficultParametersTest(DifficultParametersTest):
-    @pytest.mark.skip(reason="Monet does not support identifiers with "
-                      "an '%' in them.")
-    def test_round_trip(*args, **kwargs):
-        pass
-
-
-class IsOrIsNotDistinctFromTest(IsOrIsNotDistinctFromTest):
-    @pytest.mark.skip(reason="Monet does not support the 'IS DISTINCT "
-                      "FROM' syntax.")
-    def test_is_or_is_not_distinct_from():
-        pass
-
-
 class TableDDLTest(TableDDLTest):
     @pytest.mark.skip(reason="column names of level >= 3")
     def test_create_table_schema(*args, **kwargs):
@@ -74,13 +60,13 @@ class CTETest(CTETest):
     pass
 
 
-@pytest.mark.skip(reason="The tests of this class use the CHECK column "
-                  "constraint which is not support by MonetDB. The "
-                  "expression compiler gives a Warning so the user is "
-                  "notified for the skipped constraint but Warning are "
-                  "turned to exceptions from the test suite")
-class QuotedNameArgumentTest(QuotedNameArgumentTest):
-    pass
+#@pytest.mark.skip(reason="The tests of this class use the CHECK column "
+#                  "constraint which is not support by MonetDB. The "
+#                  "expression compiler gives a Warning so the user is "
+#                  "notified for the skipped constraint but Warning are "
+#                  "turned to exceptions from the test suite")
+#class QuotedNameArgumentTest(QuotedNameArgumentTest):
+#    pass
 
 
 @pytest.mark.skip(reason="The dialect is not supporting JSON type")

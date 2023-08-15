@@ -208,7 +208,6 @@ class MonetCompiler(compiler.SQLCompiler):
         return self.process(binary.left) + " %% " + self.process(binary.right)
 
     def visit_sequence(self, seq, **kwargs):
-        print(seq)
         exc = "(NEXT VALUE FOR %s)" \
               % self.dialect.identifier_preparer.format_sequence(seq)
         return exc

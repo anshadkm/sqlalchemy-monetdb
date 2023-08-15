@@ -36,7 +36,6 @@ class MonetExecutionContext(default.DefaultExecutionContext):
             if isinstance(column.default, schema.PassiveDefault):
                 return self.execute_string("SELECT %s" % column.default.arg)
             elif isinstance(column.type, sql_types.Integer) and isinstance(column.default, schema.Sequence):
-                print(schema.Sequence);
                 exc = "SELECT NEXT VALUE FOR %s" \
                       % self.dialect.identifier_preparer.format_sequence(column.sequence)
                 next_value = self.execute_string(exc)
@@ -45,7 +44,6 @@ class MonetExecutionContext(default.DefaultExecutionContext):
         return default_value
 
     def fire_sequence(self, seq, type_):
-        print(seq, type_)
         return self._execute_scalar(("SELECT NEXT VALUE FOR %s" %
                                      self.identifier_preparer.format_sequence(seq)), type_)
 
@@ -60,6 +58,7 @@ class MonetIdentifierPreparer(compiler.IdentifierPreparer):
         super(MonetIdentifierPreparer, self).__init__(*args, **kwargs)
 
         self._double_percents = False
+
     
     def _bindparam_requires_quotes(self, value):
         """Return True if the given identifier requires quoting."""

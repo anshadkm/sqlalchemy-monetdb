@@ -30,8 +30,9 @@ try:
 except ImportError:
     pass
 
-def quote(s):
-    return "'" + s + "'"
+def quote(value):
+    value = value.replace("'", "''")
+    return "'" + value + "'"
 
 class MonetDialect(default.DefaultDialect):
 
