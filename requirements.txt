@@ -1,0 +1,2 @@
+pymonetdb @ https://github.com/MonetDB/pymonetdb/archive/refs/heads/master.zip
+sqlalchemy == 2.0.20
