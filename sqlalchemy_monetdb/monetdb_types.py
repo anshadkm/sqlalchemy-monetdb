@@ -49,6 +49,10 @@ class TIME(sqltypes.TIME):
         print('time self', precision)
 
 
+class JSON(sqltypes.JSON):
+    __visit_name__ = "JSON"
+
+
 class MDB_UUID(sqltypes.UUID[sqltypes._UUID_RETURN]):
     render_bind_cast = True
     render_literal_cast = True
@@ -91,4 +95,5 @@ MONETDB_TYPE_MAP = {
     'timestamptz': TIMESTAMP,
     'varchar': VARCHAR,
     'uuid': UUID,
+    'json': JSON
 }
