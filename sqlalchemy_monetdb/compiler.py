@@ -1,6 +1,6 @@
 from sqlalchemy import types as sqltypes, schema, util
 from sqlalchemy.sql import compiler, operators
-from .monetdb_types import TIME as TIME
+# from .monetdb_types import TIME as TIME
 import re
 
 FK_ON_DELETE = re.compile(
@@ -9,6 +9,7 @@ FK_ON_DELETE = re.compile(
 FK_ON_UPDATE = re.compile(
     r"^(?:RESTRICT|CASCADE|SET NULL|NO ACTION|SET DEFAULT)$", re.I
 )
+
 
 class MonetDDLCompiler(compiler.DDLCompiler):
     def visit_create_sequence(self, create, **kwargs):
@@ -27,7 +28,7 @@ class MonetDDLCompiler(compiler.DDLCompiler):
     def define_constraint_cascades(self, constraint):
         text = ""
         text += " ON DELETE %s" % self.preparer.validate_sql_phrase(
-            constraint.ondelete if constraint.ondelete else 'NO ACTION' , FK_ON_DELETE
+            constraint.ondelete if constraint.ondelete else 'NO ACTION', FK_ON_DELETE
         )
         text += " ON UPDATE %s" % self.preparer.validate_sql_phrase(
             constraint.onupdate if constraint.onupdate else 'NO ACTION', FK_ON_UPDATE
@@ -36,7 +37,7 @@ class MonetDDLCompiler(compiler.DDLCompiler):
 
     def visit_identity_column(self, identity, **kw):
         text = "GENERATED %s AS IDENTITY" % (
-            "ALWAYS",# if identity.always else "BY DEFAULT",
+            "ALWAYS",  # if identity.always else "BY DEFAULT",
         )
         options = self.get_identity_options(identity)
         if options:
@@ -71,20 +72,20 @@ class MonetDDLCompiler(compiler.DDLCompiler):
         return colspec
 
     def visit_check_constraint(self, constraint, **kwargs):
-        # TODO: this turns out to be an error in pytest 
-        #util.warn("Skipped unsupported check constraint %s" % constraint.name)
+        # TODO: this turns out to be an error in pytest
+        # util.warn("Skipped unsupported check constraint %s" % constraint.name)
         return None
 
     def visit_column_check_constraint(self, constraint, **kw):
-        # TODO: this turns out to be an error in pytest 
-        #util.warn("Skipped unsupported check constraint %s" % constraint.name)
+        # TODO: this turns out to be an error in pytest
+        # util.warn("Skipped unsupported check constraint %s" % constraint.name)
         return None
 
     def visit_create_index(self, create, **kw):
         preparer = self.preparer
         index = create.element
         if index.unique:
-            text = "ALTER TABLE %s ADD CONSTRAINT %s UNIQUE " % ( 
+            text = "ALTER TABLE %s ADD CONSTRAINT %s UNIQUE " % (
                 preparer.format_table(index.table),
                 self._prepared_index_name(index, include_schema=False),
             )
@@ -92,8 +93,8 @@ class MonetDDLCompiler(compiler.DDLCompiler):
             text = "CREATE "
             text += "INDEX "
             text += "%s ON %s " % (
-             self._prepared_index_name(index, include_schema=False),
-             preparer.format_table(index.table),
+                    self._prepared_index_name(index, include_schema=False),
+                    preparer.format_table(index.table),
             )
 
         if len(index.expressions) > 0:
@@ -105,6 +106,7 @@ class MonetDDLCompiler(compiler.DDLCompiler):
             )
 
         return text
+
 
 class MonetTypeCompiler(compiler.GenericTypeCompiler):
     def visit_DOUBLE_PRECISION(self, type_):
@@ -154,8 +156,7 @@ class MonetTypeCompiler(compiler.GenericTypeCompiler):
 
 
 class MonetCompiler(compiler.SQLCompiler):
-
-    # MonetDB only allowes simple names (strings) as parameters names 
+    # MonetDB only allowes simple names (strings) as parameters names
     # Some remapping is done here
     bindname_escape_characters = util.immutabledict(
         {
@@ -221,6 +222,7 @@ class MonetCompiler(compiler.SQLCompiler):
             text += " OFFSET " + str(select._offset)
         return text
     """
+
     def limit_clause(self, select, **kw):
         text = ""
         if select._limit_clause is not None:
@@ -228,7 +230,6 @@ class MonetCompiler(compiler.SQLCompiler):
         if select._offset_clause is not None:
             text += " OFFSET " + self.process(select._offset_clause, **kw)
         return text
-
 
     def visit_extended_join(self, join, asfrom=False, **kwargs):
         """Support for full outer join, created by
@@ -350,6 +351,3 @@ class MonetCompiler(compiler.SQLCompiler):
                 pattern_replace,
                 self.render_literal_value(flags, sqltypes.STRINGTYPE),
             )
-
-
-

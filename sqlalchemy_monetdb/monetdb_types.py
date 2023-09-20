@@ -7,6 +7,7 @@ from sqlalchemy.types import INTEGER, BIGINT, SMALLINT, VARCHAR, CHAR, TEXT,\
     FLOAT, DATE, BOOLEAN, DECIMAL, TIMESTAMP, BLOB, UUID
 from uuid import UUID as _python_UUID
 
+
 class INET(sqltypes.TypeEngine):
     __visit_name__ = "INET"
 
@@ -25,6 +26,7 @@ class DOUBLE_PRECISION(sqltypes.Float):
 
 class TINYINT(sqltypes.Integer):
     __visit_name__ = "TINYINT"
+
 
 class TIME(sqltypes.TIME):
     """MonetDB TIME type."""

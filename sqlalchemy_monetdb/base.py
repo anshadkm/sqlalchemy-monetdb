@@ -59,7 +59,6 @@ class MonetIdentifierPreparer(compiler.IdentifierPreparer):
 
         self._double_percents = False
 
-    
     def _bindparam_requires_quotes(self, value):
         """Return True if the given identifier requires quoting."""
         lc_value = value.lower()
@@ -70,4 +69,3 @@ class MonetIdentifierPreparer(compiler.IdentifierPreparer):
             or value[0] in self.illegal_initial_characters
             or not self.legal_characters.match(str(value))
         )
-

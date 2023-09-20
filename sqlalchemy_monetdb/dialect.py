@@ -4,8 +4,8 @@ from typing import Optional
 from collections import defaultdict
 
 from sqlalchemy import text
-from sqlalchemy import sql, util
-from sqlalchemy import types as sqltypes
+# from sqlalchemy import sql, util
+# from sqlalchemy import types as sqltypes
 
 from sqlalchemy import pool, exc
 from sqlalchemy.engine import default, reflection, ObjectScope, ObjectKind
@@ -15,7 +15,7 @@ from sqlalchemy_monetdb.base import MonetExecutionContext, \
 from sqlalchemy_monetdb.compiler import MonetDDLCompiler, MonetTypeCompiler, \
     MonetCompiler
 from sqlalchemy_monetdb.monetdb_types import MONETDB_TYPE_MAP
-from .monetdb_types import TIME
+# from .monetdb_types import TIME
 import pymonetdb
 
 pymonetdb.paramstyle = 'named'
@@ -30,12 +30,13 @@ try:
 except ImportError:
     pass
 
+
 def quote(value):
     value = value.replace("'", "''")
     return "'" + value + "'"
 
-class MonetDialect(default.DefaultDialect):
 
+class MonetDialect(default.DefaultDialect):
     supports_statement_cache = False
     name = "monetdb"
     driver = "pymonetdb"
@@ -106,8 +107,8 @@ class MonetDialect(default.DefaultDialect):
                     "AND tables.schema_id = schemas.id "
                     "AND type in ( 0, 1) "
                     "AND tables.name = :name "
-                    "AND schemas.name = CURRENT_SCHEMA",
-                    ), {'name': table_name})
+                    "AND schemas.name = CURRENT_SCHEMA",),
+                {'name': table_name})
 
         else:
             cursor = connection.execute(
@@ -118,8 +119,8 @@ class MonetDialect(default.DefaultDialect):
                     "AND tables.schema_id = schemas.id "
                     "AND type in ( 0, 1 ) "
                     "AND tables.name = :name "
-                    "AND schemas.name = :schema",
-                    ), {'name': table_name, 'schema': schema})
+                    "AND schemas.name = :schema",),
+                {'name': table_name, 'schema': schema})
 
         res = cursor.fetchall()
         return bool(res)
@@ -128,10 +129,10 @@ class MonetDialect(default.DefaultDialect):
     def has_sequence(self, connection: "Connection", sequence_name, schema=None, **kw):
         if schema is None:
             q = """ SELECT id FROM sys.sequences WHERE name = :name AND schema_id = (select id from schemas where name = CURRENT_SCHEMA) """
-            args = { "name": sequence_name }
+            args = {"name": sequence_name}
         else:
             q = """ SELECT id FROM sys.sequences WHERE name = :name AND schema_id = (select id from schemas where name = :schema) """
-            args = { "name": sequence_name, "schema": schema }
+            args = {"name": sequence_name, "schema": schema}
         cursor = connection.execute(text(q), args)
         res = cursor.fetchall()
         return bool(res)
@@ -148,7 +149,7 @@ class MonetDialect(default.DefaultDialect):
         q = "SELECT name FROM sys.sequences"
         if schema:
             q += " where schema_id = (select id from schemas where name = :schema)"
-            args = { "schema": schema }
+            args = {"schema": schema}
         else:
             q += " where schema_id = (select id from schemas where name = CURRENT_SCHEMA)"
             args = {}
@@ -198,7 +199,7 @@ class MonetDialect(default.DefaultDialect):
 
         return table_id
 
-    def _get_columns(self, connection: "Connection", filter_names=[], schema=None, temp=0, tabletypes=[ 0, 1], **kw):
+    def _get_columns(self, connection: "Connection", filter_names=[], schema=None, temp=0, tabletypes=[0, 1], **kw):
         ischema = schema
         columns = defaultdict(list)
         if len(tabletypes) == 0:
@@ -207,39 +208,39 @@ class MonetDialect(default.DefaultDialect):
             if not schema:
                 ischema = 'tmp'
         for table_name in filter_names:
-          q = ""
-          args = {}
-          if ischema:
-            q = """SELECT c.name, c."type", c.type_digits digits, c.type_scale scale, c."null", c."default" cdefault, c.number
-                FROM sys.tables t, sys.schemas s, sys.columns c                                                                                                                           
-                        WHERE c.table_id = t.id                                                                                                                                             
-                        AND t.name = :table                                                                                                                                              
-                        AND t.schema_id = s.id                                                                                                                                              
+            q = ""
+            args = {}
+            if ischema:
+                q = """SELECT c.name, c."type", c.type_digits digits, c.type_scale scale, c."null", c."default" cdefault, c.number
+                FROM sys.tables t, sys.schemas s, sys.columns c
+                        WHERE c.table_id = t.id
+                        AND t.name = :table
+                        AND t.schema_id = s.id
                         AND t.temporary = :temp
                         AND t.type in ( %s )
-                        AND s.name = :schema                                                                                                                                             
-                ORDER BY c.number   
+                        AND s.name = :schema
+                ORDER BY c.number
                 """ % (", ".join(str(tt) for tt in tabletypes))
-            args = {"table": table_name, "schema": ischema, "temp": temp}
-          else:
-            q = """SELECT c.name, c."type", c.type_digits digits, c.type_scale scale, c."null", c."default" cdefault, c.number
-                FROM sys.tables t, sys.schemas s, sys.columns c                                                                                                                           
-                        WHERE c.table_id = t.id                                                                                                                                             
-                        AND t.name = :table                                                                                                                                              
-                        AND t.schema_id = s.id                                                                                                                                              
-                        AND t.temporary = :temp
-                        AND t.type in ( %s )
-                        AND s.name = CURRENT_SCHEMA
-                ORDER BY c.number   
-                """ % (", ".join(str(tt) for tt in tabletypes))
-            args = {"table": table_name, "temp": temp}
-          c = connection.execute(text(q), args)
+                args = {"table": table_name, "schema": ischema, "temp": temp}
+            else:
+                q = """SELECT c.name, c."type", c.type_digits digits, c.type_scale scale, c."null", c."default" cdefault, c.number
+                    FROM sys.tables t, sys.schemas s, sys.columns c
+                            WHERE c.table_id = t.id
+                            AND t.name = :table
+                            AND t.schema_id = s.id
+                            AND t.temporary = :temp
+                            AND t.type in ( %s )
+                            AND s.name = CURRENT_SCHEMA
+                    ORDER BY c.number
+                    """ % (", ".join(str(tt) for tt in tabletypes))
+                args = {"table": table_name, "temp": temp}
+            c = connection.execute(text(q), args)
 
-          if c.rowcount == 0:
-              continue
-          result = columns[(schema,table_name)] 
-          for row in c:
-            args = ()
+            if c.rowcount == 0:
+                continue
+            result = columns[(schema, table_name)]
+            for row in c:
+                args = ()
             kwargs = {}
             name = row.name
             if row.type in ("char", "varchar"):
@@ -266,17 +267,16 @@ class MonetDialect(default.DefaultDialect):
                     autoincrement = True
                     cdefault = None
                     # todo handle identity options
-                    # ie join somehow with sequences 
-                    identity = { 'start': '0' }
+                    # ie join somehow with sequences
+                    identity = {'start': '0'}
                     print(seq_schema, seq, autoincrement)
 
-            column = {
-                "name": name,
-                "type": col_type,
-                "default": cdefault,
-                "autoincrement": autoincrement,
-                "nullable": row.null,
-            }
+            column = {"name": name,
+                      "type": col_type,
+                      "default": cdefault,
+                      "autoincrement": autoincrement,
+                      "nullable": row.null,
+                      }
             if identity is not None:
                 column["identity"] = identity
 
@@ -284,9 +284,9 @@ class MonetDialect(default.DefaultDialect):
         return columns.items()
 
     def get_columns(self, connection: "Connection", table_name, schema=None, **kw):
-        data = self._get_columns(connection, [ table_name ], schema, temp=0, tabletypes=[0,1],  **kw)
-        return self._value_or_raise(data, table_name, schema)                                                                                                                               
-    
+        data = self._get_columns(connection, [table_name], schema, temp=0, tabletypes=[0, 1], **kw)
+        return self._value_or_raise(data, table_name, schema)
+
     def get_multi_columns(
         self, connection, schema, filter_names, scope, kind, **kw
     ):
@@ -304,7 +304,7 @@ class MonetDialect(default.DefaultDialect):
         tabletypes = []
         if not filter_names:
             filter_names = []
-            if temp == 1 and not(schema):
+            if temp == 1 and not schema:
                 tabletypes.append(30)
                 if ObjectKind.TABLE in kind:
                     filter_names += self.get_temp_table_names(connection)
@@ -328,8 +328,7 @@ class MonetDialect(default.DefaultDialect):
                 f"{schema}.{table}" if schema else table
             ) from None
 
-    def _get_foreign_keys(self, connection: "Connection", schema=None, filter_names=[], temp=0, tabletypes=[ 0, 1], **kw):
-
+    def _get_foreign_keys(self, connection: "Connection", schema=None, filter_names=[], temp=0, tabletypes=[0, 1], **kw):
         """Return information about foreign_keys in `table_name`.
 
         Given a string `table_name`, and an optional string `schema`, return
@@ -367,7 +366,7 @@ class MonetDialect(default.DefaultDialect):
         q = """
         WITH action_type (id, act) AS (VALUES (0, 'NO ACTION'), (1, 'CASCADE'), (2, 'RESTRICT'), (3, 'SET NULL'), (4, 'SET DEFAULT'))
         select fk_s, fk_t, fk_c, o, fk, pk_s, pk_t, pk_c, on_update, on_delete from
-        (select fs.name fk_s, fkt.name fk_t, fkt.id id 
+        (select fs.name fk_s, fkt.name fk_t, fkt.id id
          from sys.tables as fkt, sys.schemas as fs
         where fkt.temporary = :temp AND fkt.type in (%s) AND fkt.schema_id = fs.id AND fs.name = %s AND fkt.name in (%s)) f
         LEFT OUTER JOIN
@@ -401,12 +400,12 @@ ORDER BY fk_t, fk, o
                 if key_data:
                     key_data["constrained_columns"] = constrained_columns
                     key_data["referred_columns"] = referred_columns
-                    key_data["options"] = { k: v for k, v in [
+                    key_data["options"] = {k: v for k, v in [
                         ("onupdate", onupdate),
                         ("ondelete", ondelete),
-                        #("initially", False),
-                        #("deferrable", False),
-                        #("match", "full"),
+                        # ("initially", False),
+                        # ("deferrable", False),
+                        # ("match", "full"),
                     ] if v is not None and v != "NO ACTION"
                     }
                     results.append(key_data)
@@ -417,7 +416,7 @@ ORDER BY fk_t, fk, o
                 key_data = None
                 if table_name != row.fk_t:
                     table_name = row.fk_t
-                    results = fkeys[(schema,table_name)] 
+                    results = fkeys[(schema, table_name)]
 
             if table_name is None or last_name != row.fk:
                 if row.fk:
@@ -429,7 +428,7 @@ ORDER BY fk_t, fk, o
                     ondelete = row.on_delete
                     onupdate = row.on_update
                 table_name = row.fk_t
-                results = fkeys[(schema,table_name)] 
+                results = fkeys[(schema, table_name)]
 
             last_name = row.fk
             cnt += 1
@@ -440,25 +439,24 @@ ORDER BY fk_t, fk, o
         if key_data:
             key_data["constrained_columns"] = constrained_columns
             key_data["referred_columns"] = referred_columns
-            key_data["options"] = { k: v for k, v in [
-                    ("onupdate", onupdate),
-                    ("ondelete", ondelete),
-                    #("initially", False),
-                    #("deferrable", False),
-                    #("match", "full"),
-                ]
-                if v is not None and v != "NO ACTION"
-            }
+            key_data["options"] = {k: v for k, v in
+                                   [
+                                       ("onupdate", onupdate),
+                                       ("ondelete", ondelete),
+                                       # ("initially", False),
+                                       # ("deferrable", False),
+                                       # ("match", "full"),
+                                   ] if v is not None and v != "NO ACTION"}
             results.append(key_data)
 
         data = fkeys.items()
         return data
 
     def get_foreign_keys(self, connection: "Connection", table_name, schema=None, **kw):
-        data = self._get_foreign_keys(connection, schema=schema, filter_names=[ table_name], temp=0, tabletypes=[0,1], **kw)
+        data = self._get_foreign_keys(connection, schema=schema, filter_names=[table_name], temp=0, tabletypes=[0, 1], **kw)
         return self._value_or_raise(data, table_name, schema)
 
-    def get_multi_foreign_keys( self, connection, schema, filter_names, scope, kind, **kw):
+    def get_multi_foreign_keys(self, connection, schema, filter_names, scope, kind, **kw):
         if scope is ObjectScope.ANY:
             default_data = self.get_multi_foreign_keys(connection, schema, filter_names, ObjectScope.DEFAULT, kind, **kw)
             temp_data = self.get_multi_foreign_keys(connection, schema, filter_names, ObjectScope.TEMPORARY, kind, **kw)
@@ -473,7 +471,7 @@ ORDER BY fk_t, fk, o
         tabletypes = []
         if not filter_names:
             filter_names = []
-            if temp == 1 and not(schema):
+            if temp == 1 and not schema:
                 tabletypes.append(30)
                 if ObjectKind.TABLE in kind:
                     filter_names += self.get_temp_table_names(connection)
@@ -525,7 +523,7 @@ ORDER BY fk_t, fk, o
         SELECT  i.name ind, kc.name col, it.idx tpe, kc.nr knr, i.table_id table_id
         FROM    sys.idxs AS i LEFT JOIN sys.keys AS k ON i.name = k.name, sys.objects kc, tbls t, it
         WHERE   i.id = kc.id
-                AND k.type IS NULL 
+                AND k.type IS NULL
                 AND i.type = it.id
         UNION
         SELECT  k.name ind, kc.name col, 'UNIQUE' tpe, kc.nr knr, k.table_id table_id
@@ -556,7 +554,7 @@ ORDER BY fk_t, fk, o
                 column_names = []
                 if table_name != row.tbl:
                     table_name = row.tbl
-                    results = idxs[(schema,table_name)] 
+                    results = idxs[(schema, table_name)]
 
             if table_name is None or last_name != row.ind:
                 if row.ind:
@@ -567,7 +565,7 @@ ORDER BY fk_t, fk, o
                         "dialect_options": {},
                     }
                 table_name = row.tbl
-                results = idxs[(schema,table_name)] 
+                results = idxs[(schema, table_name)]
 
             last_name = row.ind
             cnt += 1
@@ -582,7 +580,7 @@ ORDER BY fk_t, fk, o
         return data
 
     def get_indexes(self, connection: "Connection", table_name, schema=None, **kw):
-        data = self._get_indexes(connection, [ table_name ], schema, temp=0, tabletypes=[0,1], **kw)
+        data = self._get_indexes(connection, [table_name], schema, temp=0, tabletypes=[0, 1], **kw)
         return self._value_or_raise(data, table_name, schema)
 
     def get_multi_indexes(
@@ -602,7 +600,7 @@ ORDER BY fk_t, fk, o
         tabletypes = []
         if not filter_names:
             filter_names = []
-            if temp == 1 and not(schema):
+            if temp == 1 and not schema:
                 tabletypes.append(30)
                 if ObjectKind.TABLE in kind:
                     filter_names += self.get_temp_table_names(connection)
@@ -619,11 +617,11 @@ ORDER BY fk_t, fk, o
         return self._get_indexes(connection, filter_names, schema, temp=temp, tabletypes=tabletypes, **kw)
 
     def do_commit(self, connection):
-        if not(connection.autocommit):
+        if not connection.autocommit:
             connection.commit()
 
     def do_rollback(self, connection):
-        if not(connection.autocommit):
+        if not connection.autocommit:
             connection.rollback()
 
     @reflection.cache
@@ -720,7 +718,7 @@ ORDER BY fk_t, fk, o
             name = table[0][1]
             return {'constrained_columns': cols, 'name': name}
         else:
-            return {'constrained_columns': [], 'name': None }
+            return {'constrained_columns': [], 'name': None}
 
     def get_unique_constraints(self, connection: "Connection", table_name, schema=None, **kw):
         """Return information about unique constraints in `table_name`.
@@ -779,21 +777,18 @@ ORDER BY fk_t, fk, o
             dbapi_connection.set_autocommit(True)
         else:
             dbapi_connection.set_autocommit(False)
-            #cursor = dbapi_connection.cursor()
-            #print("todo ISO level %s\n" % level)
-            #cursor.execute( "SET SESSION CHARACTERISTICS AS TRANSACTION " f"ISOLATION LEVEL {level}"
-            #cursor.execute("COMMIT")
-            #cursor.close()
+            # cursor = dbapi_connection.cursor()
+            # print("todo ISO level %s\n" % level)
+            # cursor.execute( "SET SESSION CHARACTERISTICS AS TRANSACTION " f"ISOLATION LEVEL {level}"
+            # cursor.execute("COMMIT")
+            # cursor.close()
 
     def get_isolation_level(self, dbapi_connection):
         if dbapi_connection.autocommit:
             return "AUTOCOMMIT"
         return "SERIALIZABLE"
-        #cursor = dbapi_connection.cursor()
-        #cursor.execute("show transaction isolation level")
-        #val = cursor.fetchone()[0]
-        #cursor.close()
-        #return val.upper()
-
-
-
+        # cursor = dbapi_connection.cursor()
+        # cursor.execute("show transaction isolation level")
+        # val = cursor.fetchone()[0]
+        # cursor.close()
+        # return val.upper()
