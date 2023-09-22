@@ -3,7 +3,7 @@
 set -x
 set -e
 
-FARM=/tmp/farm
+FARM=/tmp/monetdb
 
 monetdbd stop ${FARM}
 rm -rf ${FARM}
