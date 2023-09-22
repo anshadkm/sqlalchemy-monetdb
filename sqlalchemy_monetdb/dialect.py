@@ -241,46 +241,47 @@ class MonetDialect(default.DefaultDialect):
             result = columns[(schema, table_name)]
             for row in c:
                 args = ()
-            kwargs = {}
-            name = row.name
-            if row.type in ("char", "varchar"):
-                args = (row.digits,)
-            elif row.type == "decimal":
-                args = (row.digits, row.scale)
-            elif row.type == 'timestamptz':
-                kwargs = {'timezone': True}
-            col_type = MONETDB_TYPE_MAP.get(row.type, None)
-            if col_type is None:
-                raise TypeError("Can't resolve type {0} (column '{1}')".format(col_type, name))
-            col_type = col_type(*args, **kwargs)
+                kwargs = {}
+                name = row.name
+                if row.type in ("char", "varchar"):
+                    args = (row.digits,)
+                elif row.type == "decimal":
+                    args = (row.digits, row.scale)
+                elif row.type == 'timestamptz':
+                    kwargs = {'timezone': True}
+                col_type = MONETDB_TYPE_MAP.get(row.type, None)
+                if col_type is None:
+                    raise TypeError("Can't resolve type {0} (column '{1}')".format(col_type, name))
+                col_type = col_type(*args, **kwargs)
 
-            # monetdb translates an AUTO INCREMENT into a sequence
-            autoincrement = False
-            cdefault = row.cdefault
-            identity = None
-            if cdefault is not None:
-                r = r"""next value for \"(\w*)\"\.\"(\w*)"$"""
-                match = re.search(r, cdefault)
-                if match is not None:
-                    seq_schema = match.group(1)
-                    seq = match.group(2)
-                    autoincrement = True
-                    cdefault = None
-                    # todo handle identity options
-                    # ie join somehow with sequences
-                    identity = {'start': '0'}
-                    print(seq_schema, seq, autoincrement)
+                # monetdb translates an AUTO INCREMENT into a sequence
+                autoincrement = False
+                cdefault = row.cdefault
+                identity = None
+                if cdefault is not None:
+                    r = r"""next value for \"(\w*)\"\.\"(\w*)"$"""
+                    match = re.search(r, cdefault)
+                    if match is not None:
+                        seq_schema = match.group(1)
+                        seq = match.group(2)
+                        autoincrement = True
+                        cdefault = None
+                        # todo handle identity options
+                        # ie join somehow with sequences
+                        identity = {'start': '0'}
+                        print(seq_schema, seq, autoincrement)
 
-            column = {"name": name,
-                      "type": col_type,
-                      "default": cdefault,
-                      "autoincrement": autoincrement,
-                      "nullable": row.null,
-                      }
-            if identity is not None:
-                column["identity"] = identity
+                column = {"name": name,
+                          "type": col_type,
+                          "default": cdefault,
+                          "autoincrement": autoincrement,
+                          "nullable": row.null,
+                          }
+                if identity is not None:
+                    column["identity"] = identity
 
-            result.append(column)
+                result.append(column)
+
         return columns.items()
 
     def get_columns(self, connection: "Connection", table_name, schema=None, **kw):
