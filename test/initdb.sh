@@ -2,7 +2,7 @@
 #
 
 set -x
-set +e
+set -e
 
 DATABASE="test"
 USER="monetdb"
@@ -20,5 +20,5 @@ echo "create schema test_schema;" | mclient -d $DATABASE
 echo "create schema test_schema2;" | mclient -d $DATABASE
 echo "alter user monetdb set schema test_schema2;" | mclient -d $DATABASE
 
-set -e
+set +e
 set +x
