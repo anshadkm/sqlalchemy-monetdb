@@ -69,6 +69,10 @@ class MonetDialect(default.DefaultDialect):
     def dbapi(cls):
         return __import__("pymonetdb", fromlist="sql")
 
+    @classmethod
+    def import_dbapi(cls):
+        return cls.dbapi()
+
     def create_connect_args(self, url):
         opts = url.translate_connect_args()
         return [], opts
