@@ -2,6 +2,7 @@ from sqlalchemy.testing.requirements import SuiteRequirements, exclusions
 from sqlalchemy.testing.exclusions import only_on
 from sqlalchemy.pool import QueuePool
 
+
 class Requirements(SuiteRequirements):
     def get_order_by_collation(self, config):
         pass
@@ -91,14 +92,13 @@ class Requirements(SuiteRequirements):
         # somehow only_if([x, y]) isn't working here, negation/conjunctions
         # getting confused.
         return exclusions.only_if(
-            lambda: self.on_update_cascade.enabled
-            or self.deferrable_fks.enabled
+            lambda: self.on_update_cascade.enabled or self.deferrable_fks.enabled
         )
 
     @property
     def queue_pool(self):
         """target database is using QueuePool"""
-        
+
         # NOTE: according to the SQLAlchemy documentation "QueuePool is
         # the default pooling implementation used for all Engine
         # objects, unless the SQLite dialect is in use." so propably we
@@ -164,7 +164,7 @@ class Requirements(SuiteRequirements):
         SQL expression, such as one that uses the addition operator.
         parameter
         """
-        # NOTE: we are getting syntax error in: “select * from t offset 1+” 
+        # NOTE: we are getting syntax error in: “select * from t offset 1+”
         return exclusions.closed()
 
     @property
@@ -209,7 +209,7 @@ class Requirements(SuiteRequirements):
     @property
     def nullsordering(self):
         """Target backends that support nulls ordering."""
-        # TODO: check what is happening with NULL ordering        
+        # TODO: check what is happening with NULL ordering
 
         return exclusions.closed()
 
@@ -317,9 +317,7 @@ class Requirements(SuiteRequirements):
     @property
     def sane_rowcount_w_returning(self):
         return exclusions.fails_if(
-            lambda config: not (
-                config.db.dialect.supports_sane_rowcount_returning
-            ),
+            lambda config: not (config.db.dialect.supports_sane_rowcount_returning),
             "driver doesn't support 'sane' rowcount when returning is on",
         )
 
@@ -406,7 +404,7 @@ class Requirements(SuiteRequirements):
     def duplicate_names_in_cursor_description(self):
         """target platform supports a SELECT statement that has
         the same name repeated more than once in the columns list."""
-        # NOTE: SELECT: identifier ‘column_name’ ambiguous 
+        # NOTE: SELECT: identifier ‘column_name’ ambiguous
         return exclusions.closed()
 
     @property
@@ -600,7 +598,7 @@ class Requirements(SuiteRequirements):
     @property
     def comment_reflection(self):
         # TODO: COMMENT on SQL objects are in general supported by
-        # monetdb. Investigate if we could implement reflection for them 
+        # monetdb. Investigate if we could implement reflection for them
         return exclusions.closed()
 
     @property
@@ -633,32 +631,32 @@ class Requirements(SuiteRequirements):
 
     @property
     def foreign_key_constraint_option_reflection_ondelete(self):
-        # TODO: this probably works with MonetDB check it 
+        # TODO: this probably works with MonetDB check it
         return exclusions.open()
 
     @property
     def fk_constraint_option_reflection_ondelete_restrict(self):
-        # TODO: this probably works with MonetDB check it 
+        # TODO: this probably works with MonetDB check it
         return exclusions.open()
 
     @property
     def fk_constraint_option_reflection_ondelete_noaction(self):
-        # TODO: this probably works with MonetDB check it 
+        # TODO: this probably works with MonetDB check it
         return exclusions.open()
 
     @property
     def foreign_key_constraint_option_reflection_onupdate(self):
-        # TODO: this probably works with MonetDB check it 
+        # TODO: this probably works with MonetDB check it
         return exclusions.open()
 
     @property
     def fk_constraint_option_reflection_onupdate_restrict(self):
-        # TODO: this probably works with MonetDB check it 
+        # TODO: this probably works with MonetDB check it
         return exclusions.open()
 
     @property
     def temp_table_reflection(self):
-        #return exclusions.open()
+        # return exclusions.open()
         return exclusions.closed()
 
     @property
@@ -710,10 +708,10 @@ class Requirements(SuiteRequirements):
         """Target database reflects unique indexes as unique constrains."""
         return exclusions.open()
 
-    @property                                                                                                                                                                               
-    def unique_constraints_reflect_as_index(self):                                                                                                                                          
-        """Target database reflects unique constraints as indexes."""       
-        return exclusions.open()                                                                                                                                                          
+    @property
+    def unique_constraints_reflect_as_index(self):
+        """Target database reflects unique constraints as indexes."""
+        return exclusions.open()
 
     @property
     def check_constraint_reflection(self):
@@ -807,7 +805,8 @@ class Requirements(SuiteRequirements):
         datetime.datetime() with microsecond objects."""
 
         return exclusions.open()
-    # TODO: this is how it was done till now  
+
+    # TODO: this is how it was done till now
     # time_microseconds = datetime_microseconds
 
     @property
@@ -934,7 +933,7 @@ class Requirements(SuiteRequirements):
                 ]
             }
         """
-        return { "default": "SERIALIZABLE", "supported": [ "AUTOCOMMIT", "SERIALIZABLE" ] }
+        return {"default": "SERIALIZABLE", "supported": ["AUTOCOMMIT", "SERIALIZABLE"]}
 
     @property
     def json_type(self):
@@ -1116,7 +1115,7 @@ class Requirements(SuiteRequirements):
         """Target database must support savepoints."""
         # TODO: MonetDB supports SAVEPOINT. let's see if pymonetdb is ok
         return exclusions.open()
-        #return exclusions.closed()
+        # return exclusions.closed()
 
     @property
     def two_phase_transactions(self):
@@ -1258,9 +1257,7 @@ class Requirements(SuiteRequirements):
         requirement as not present.
 
         """
-        return exclusions.skip_if(
-            lambda config: config.options.low_connections
-        )
+        return exclusions.skip_if(lambda config: config.options.low_connections)
 
     @property
     def no_windows(self):
@@ -1344,15 +1341,11 @@ class Requirements(SuiteRequirements):
 
     @property
     def python38(self):
-        return exclusions.only_if(
-            lambda: util.py38, "Python 3.8 or above required"
-        )
+        return exclusions.only_if(lambda: util.py38, "Python 3.8 or above required")
 
     @property
     def cpython(self):
-        return exclusions.only_if(
-            lambda: util.cpython, "cPython interpreter needed"
-        )
+        return exclusions.only_if(lambda: util.cpython, "cPython interpreter needed")
 
     @property
     def patch_library(self):
@@ -1471,7 +1464,7 @@ class Requirements(SuiteRequirements):
     @property
     def supports_distinct_on(self):
         """If a backend supports the DISTINCT ON in a select"""
-        # NOTE: this SQL syntax is supported by MonetDB 
+        # NOTE: this SQL syntax is supported by MonetDB
         # test set of sqlalchemy is broken!!
         return exclusions.closed()
 
@@ -1495,8 +1488,8 @@ class Requirements(SuiteRequirements):
     def identity_columns(self):
         """If a backend supports GENERATED { ALWAYS | BY DEFAULT }
         AS IDENTITY"""
-        # TODO add the BY DEFAULT 
-        #         id1 INTEGER GENERATED BY DEFAULT AS IDENTITY NOT NULL                                                                                                                             # vs GENERATED BY ALWAYS AS IDENTITY  
+        # TODO add the BY DEFAULT
+        #         id1 INTEGER GENERATED BY DEFAULT AS IDENTITY NOT NULL                                                                                                                             # vs GENERATED BY ALWAYS AS IDENTITY
         return exclusions.open()
 
     @property
@@ -1506,14 +1499,14 @@ class Requirements(SuiteRequirements):
     @property
     def regexp_match(self):
         """backend supports the regexp_match operator."""
-        # TODO: check if this works with MonetDB regex support 
-        #return exclusions.open()
+        # TODO: check if this works with MonetDB regex support
+        # return exclusions.open()
         return exclusions.closed()
 
     @property
     def regexp_replace(self):
         """backend supports the regexp_replace operator."""
-        # TODO: check if this works with MonetDB regex support 
+        # TODO: check if this works with MonetDB regex support
         return exclusions.open()
 
     @property

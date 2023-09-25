@@ -1,5 +1,6 @@
 from sqlalchemy import types as sqltypes, schema, util
 from sqlalchemy.sql import compiler, operators
+
 # from .monetdb_types import TIME as TIME
 import re
 
@@ -13,8 +14,9 @@ FK_ON_UPDATE = re.compile(
 
 class MonetDDLCompiler(compiler.DDLCompiler):
     def visit_create_sequence(self, create, **kwargs):
-        text = "CREATE SEQUENCE %s AS INTEGER" % \
-               self.preparer.format_sequence(create.element)
+        text = "CREATE SEQUENCE %s AS INTEGER" % self.preparer.format_sequence(
+            create.element
+        )
         if create.element.start is not None:
             text += " START WITH %d" % create.element.start
         if create.element.increment is not None:
@@ -22,16 +24,15 @@ class MonetDDLCompiler(compiler.DDLCompiler):
         return text
 
     def visit_drop_sequence(self, drop, **kwargs):
-        return "DROP SEQUENCE %s" % \
-               self.preparer.format_sequence(drop.element)
+        return "DROP SEQUENCE %s" % self.preparer.format_sequence(drop.element)
 
     def define_constraint_cascades(self, constraint):
         text = ""
         text += " ON DELETE %s" % self.preparer.validate_sql_phrase(
-            constraint.ondelete if constraint.ondelete else 'NO ACTION', FK_ON_DELETE
+            constraint.ondelete if constraint.ondelete else "NO ACTION", FK_ON_DELETE
         )
         text += " ON UPDATE %s" % self.preparer.validate_sql_phrase(
-            constraint.onupdate if constraint.onupdate else 'NO ACTION', FK_ON_UPDATE
+            constraint.onupdate if constraint.onupdate else "NO ACTION", FK_ON_UPDATE
         )
         return text
 
@@ -47,16 +48,19 @@ class MonetDDLCompiler(compiler.DDLCompiler):
     def get_column_specification(self, column, **kwargs):
         colspec = self.preparer.format_column(column)
         impl_type = column.type.dialect_impl(self.dialect)
-        if column.primary_key and \
-            column is column.table._autoincrement_column and \
-            column.identity is None and \
-            not isinstance(impl_type, sqltypes.SmallInteger) and \
-            (
-                column.default is None or
-                (
-                    isinstance(column.default, schema.Sequence) and
-                    column.default.optional
-                )):
+        if (
+            column.primary_key
+            and column is column.table._autoincrement_column
+            and column.identity is None
+            and not isinstance(impl_type, sqltypes.SmallInteger)
+            and (
+                column.default is None
+                or (
+                    isinstance(column.default, schema.Sequence)
+                    and column.default.optional
+                )
+            )
+        ):
             colspec += " INT AUTO_INCREMENT"
         else:
             colspec += " " + self.dialect.type_compiler.process(column.type)
@@ -93,15 +97,13 @@ class MonetDDLCompiler(compiler.DDLCompiler):
             text = "CREATE "
             text += "INDEX "
             text += "%s ON %s " % (
-                    self._prepared_index_name(index, include_schema=False),
-                    preparer.format_table(index.table),
+                self._prepared_index_name(index, include_schema=False),
+                preparer.format_table(index.table),
             )
 
         if len(index.expressions) > 0:
             text += " (%s)" % ", ".join(
-                self.sql_compiler.process(
-                    expr, include_table=False, literal_binds=True
-                )
+                self.sql_compiler.process(expr, include_table=False, literal_binds=True)
                 for expr in index.expressions
             )
 
@@ -175,13 +177,12 @@ class MonetCompiler(compiler.SQLCompiler):
     )
 
     def bindparam_string(self, name, **kw):
-        if (
-            self.preparer._bindparam_requires_quotes(name)
-            and not kw.get("post_compile", False)
+        if self.preparer._bindparam_requires_quotes(name) and not kw.get(
+            "post_compile", False
         ):
             new_name = name
-            if name[0] == '%':
-                new_name = '_' + name
+            if name[0] == "%":
+                new_name = "_" + name
             quoted_name = '"%s"' % new_name
             kw["escaped_from"] = name
             name = quoted_name
@@ -194,11 +195,11 @@ class MonetCompiler(compiler.SQLCompiler):
                     lambda m: self._bind_translate_chars[m.group(0)],
                     name,
                 )
-                if new_name[0].isdigit() or new_name[0] == "_" or new_name[0] == '%':
+                if new_name[0].isdigit() or new_name[0] == "_" or new_name[0] == "%":
                     new_name = "D" + new_name
                 kw["escaped_from"] = name
                 name = new_name
-            elif name[0].isdigit() or name[0] == "_" or name[0] == '%':
+            elif name[0].isdigit() or name[0] == "_" or name[0] == "%":
                 new_name = "D" + name
                 kw["escaped_from"] = name
                 name = new_name
@@ -209,8 +210,9 @@ class MonetCompiler(compiler.SQLCompiler):
         return self.process(binary.left) + " %% " + self.process(binary.right)
 
     def visit_sequence(self, seq, **kwargs):
-        exc = "(NEXT VALUE FOR %s)" \
-              % self.dialect.identifier_preparer.format_sequence(seq)
+        exc = "(NEXT VALUE FOR %s)" % self.dialect.identifier_preparer.format_sequence(
+            seq
+        )
         return exc
 
     """
@@ -244,42 +246,42 @@ class MonetCompiler(compiler.SQLCompiler):
             join_type = " JOIN "
 
         return (
-            join.left._compiler_dispatch(self, asfrom=True, **kwargs) +
-            join_type +
-            join.right._compiler_dispatch(self, asfrom=True, **kwargs) +
-            " ON " +
-            join.onclause._compiler_dispatch(self, **kwargs)
+            join.left._compiler_dispatch(self, asfrom=True, **kwargs)
+            + join_type
+            + join.right._compiler_dispatch(self, asfrom=True, **kwargs)
+            + " ON "
+            + join.onclause._compiler_dispatch(self, **kwargs)
         )
 
     def visit_ne(self, element, **kwargs):
         return (
-            element.left._compiler_dispatch(self, **kwargs) +
-            " <> " +
-            element.right._compiler_dispatch(self, **kwargs))
+            element.left._compiler_dispatch(self, **kwargs)
+            + " <> "
+            + element.right._compiler_dispatch(self, **kwargs)
+        )
 
     def render_literal_value(self, value, type_):
         # we need to escape backslashes
         value = super(MonetCompiler, self).render_literal_value(value, type_)
-        return value.replace('\\', '\\\\')
+        return value.replace("\\", "\\\\")
 
-    def update_from_clause(self, update_stmt, from_table, extra_froms, from_hints, **kw):
-        return "FROM " + ', '.join(t._compiler_dispatch(self, asfrom=True,
-                                                        fromhints=from_hints, **kw)
-                                   for t in extra_froms)
+    def update_from_clause(
+        self, update_stmt, from_table, extra_froms, from_hints, **kw
+    ):
+        return "FROM " + ", ".join(
+            t._compiler_dispatch(self, asfrom=True, fromhints=from_hints, **kw)
+            for t in extra_froms
+        )
 
     def visit_empty_set_op_expr(self, type_, expand_op, **kw):
         if expand_op is operators.not_in_op:
             if len(type_) > 1:
-                return "(%s)) OR (1 = 1" % (
-                    ", ".join("NULL" for element in type_)
-                )
+                return "(%s)) OR (1 = 1" % (", ".join("NULL" for element in type_))
             else:
                 return "NULL) OR (1 = 1"
         elif expand_op is operators.in_op:
             if len(type_) > 1:
-                return "(%s)) AND (1 <> 1" % (
-                    ", ".join("NULL" for element in type_)
-                )
+                return "(%s)) AND (1 <> 1" % (", ".join("NULL" for element in type_))
             else:
                 return "NULL) AND (1 <> 1"
         else:
@@ -316,13 +318,9 @@ class MonetCompiler(compiler.SQLCompiler):
     def _regexp_match(self, base_op, binary, operator, kw):
         flags = binary.modifiers["flags"]
         if flags is None:
-            return self._generate_generic_binary(
-                binary, " %s " % base_op, **kw
-            )
+            return self._generate_generic_binary(binary, " %s " % base_op, **kw)
         if flags == "i":
-            return self._generate_generic_binary(
-                binary, " %s* " % base_op, **kw
-            )
+            return self._generate_generic_binary(binary, " %s* " % base_op, **kw)
         return "%s %s CONCAT('(?', %s, ')', %s)" % (
             self.process(binary.left, **kw),
             base_op,

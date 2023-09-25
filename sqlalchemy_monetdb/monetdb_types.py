@@ -3,8 +3,21 @@ from typing import TYPE_CHECKING
 from typing import overload
 
 from sqlalchemy.sql import sqltypes as sqltypes
-from sqlalchemy.types import INTEGER, BIGINT, SMALLINT, VARCHAR, CHAR, TEXT,\
-    FLOAT, DATE, BOOLEAN, DECIMAL, TIMESTAMP, BLOB, UUID
+from sqlalchemy.types import (
+    INTEGER,
+    BIGINT,
+    SMALLINT,
+    VARCHAR,
+    CHAR,
+    TEXT,
+    FLOAT,
+    DATE,
+    BOOLEAN,
+    DECIMAL,
+    TIMESTAMP,
+    BLOB,
+    UUID,
+)
 from uuid import UUID as _python_UUID
 
 
@@ -21,7 +34,7 @@ class WRD(sqltypes.Integer):
 
 
 class DOUBLE_PRECISION(sqltypes.Float):
-    __visit_name__ = 'DOUBLE PRECISION'
+    __visit_name__ = "DOUBLE PRECISION"
 
 
 class TINYINT(sqltypes.Integer):
@@ -33,9 +46,7 @@ class TIME(sqltypes.TIME):
 
     __visit_name__ = "TIME"
 
-    def __init__(
-        self, timezone: bool = False, precision: Optional[int] = None
-    ) -> None:
+    def __init__(self, timezone: bool = False, precision: Optional[int] = None) -> None:
         """Construct a TIME.
 
         :param timezone: boolean value if timezone present, default False
@@ -46,7 +57,7 @@ class TIME(sqltypes.TIME):
         """
         super().__init__(timezone=timezone)
         self.precision = precision
-        print('time self', precision)
+        print("time self", precision)
 
 
 class JSON(sqltypes.JSON):
@@ -74,26 +85,26 @@ class MDB_UUID(sqltypes.UUID[sqltypes._UUID_RETURN]):
 
 
 MONETDB_TYPE_MAP = {
-    'tinyint': TINYINT,
-    'wrd': WRD,
-    'url': URL,
-    'inet': INET,
-    'bigint': BIGINT,
-    'blob': BLOB,
-    'boolean': BOOLEAN,
-    'char': CHAR,
-    'clob': TEXT,
-    'date': DATE,
-    'decimal': DECIMAL,
-    'double': DOUBLE_PRECISION,
-    'int': INTEGER,
-    'real': FLOAT,
-    'smallint': SMALLINT,
-    'time': TIME,
-    'timetz': TIME,
-    'timestamp': TIMESTAMP,
-    'timestamptz': TIMESTAMP,
-    'varchar': VARCHAR,
-    'uuid': UUID,
-    'json': JSON
+    "tinyint": TINYINT,
+    "wrd": WRD,
+    "url": URL,
+    "inet": INET,
+    "bigint": BIGINT,
+    "blob": BLOB,
+    "boolean": BOOLEAN,
+    "char": CHAR,
+    "clob": TEXT,
+    "date": DATE,
+    "decimal": DECIMAL,
+    "double": DOUBLE_PRECISION,
+    "int": INTEGER,
+    "real": FLOAT,
+    "smallint": SMALLINT,
+    "time": TIME,
+    "timetz": TIME,
+    "timestamp": TIMESTAMP,
+    "timestamptz": TIMESTAMP,
+    "varchar": VARCHAR,
+    "uuid": UUID,
+    "json": JSON,
 }
