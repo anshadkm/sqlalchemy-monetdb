@@ -156,6 +156,9 @@ class MonetTypeCompiler(compiler.GenericTypeCompiler):
     def visit_UUID(self, type_, **kw):
         return "UUID"
 
+    def visit_JSON(self, type_, **kw):
+        return "JSON"
+
 
 class MonetCompiler(compiler.SQLCompiler):
     # MonetDB only allowes simple names (strings) as parameters names

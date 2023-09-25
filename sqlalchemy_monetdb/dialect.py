@@ -1,3 +1,4 @@
+import json
 import re
 import typing
 from typing import Optional
@@ -77,6 +78,12 @@ class MonetDialect(default.DefaultDialect):
     @classmethod
     def import_dbapi(cls):
         return cls.dbapi()
+
+    def _json_serializer (self, obj):
+        return json.dumps(obj)
+
+    def _json_deserializer (self, obj):
+        return json.loads(obj)
 
     def create_connect_args(self, url):
         opts = url.translate_connect_args()

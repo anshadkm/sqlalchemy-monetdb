@@ -17,6 +17,7 @@ from sqlalchemy.types import (
     TIMESTAMP,
     BLOB,
     UUID,
+    JSON
 )
 from uuid import UUID as _python_UUID
 
@@ -60,7 +61,7 @@ class TIME(sqltypes.TIME):
         print("time self", precision)
 
 
-class JSON(sqltypes.JSON):
+class MDB_JSON(sqltypes.JSON):
     __visit_name__ = "JSON"
 
 

@@ -20,7 +20,6 @@ class CTETest(CTETest):
     pass
 
 
-@pytest.mark.skip(reason="The dialect is not supporting JSON type")
-class JSONTest(JSONTest):
-    pass
-
+# @pytest.mark.skip(reason="The dialect is not supporting JSON type")
+# class JSONTest(JSONTest):
+#     pass
