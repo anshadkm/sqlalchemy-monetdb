@@ -295,9 +295,9 @@ class MonetCompiler(compiler.SQLCompiler):
             ", ".join(
                 "CAST(NULL AS %s)"
                 % self.dialect.type_compiler_instance.process(
-                    INTEGER() if type_._isnull else type_
+                    sqltypes.INTEGER() if type_._isnull else type_
                 )
-                for type_ in element_types or [INTEGER()]
+                for type_ in element_types or [sqltypes.INTEGER()]
             ),
         )
 
