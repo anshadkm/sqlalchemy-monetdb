@@ -705,12 +705,12 @@ class Requirements(SuiteRequirements):
 
     @property
     def unique_index_reflect_as_unique_constraints(self):
-        """Target database reflects unique indexes as unique constrains."""
+        """Target database reflects unique indexes as both unique constrains and indexes."""
         return exclusions.open()
 
     @property
     def unique_constraints_reflect_as_index(self):
-        """Target database reflects unique constraints as indexes."""
+        """Target database reflects unique constraints as both unique constraints and indexes."""
         return exclusions.open()
 
     @property

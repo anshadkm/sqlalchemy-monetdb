@@ -655,6 +655,8 @@ ORDER BY fk_t, fk, o
                         "include_columns": [],
                         "dialect_options": {},
                     }
+                    if row.tpe == "UNIQUE":
+                        index_data["duplicates_constraint"] = row.ind
                 table_name = row.tbl
                 results = idxs[(schema, table_name)]
 
