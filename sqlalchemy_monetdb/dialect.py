@@ -113,6 +113,16 @@ class MonetDialect(default.DefaultDialect):
         return [row[0] for row in rs]
 
     @reflection.cache
+    def has_index( self, connection: "Connection", table_name: str, index_name: str, schema: Optional[str] = None, **kw) -> bool:
+        if self.has_table(connection, table_name, schema=schema):
+            data = self.get_indexes( connection, table_name, schema=schema)
+            if data:
+                for i in data:
+                    if i['name'] == index_name:
+                        return True
+        return False
+
+    @reflection.cache
     def has_table(self, connection: "Connection", table_name, schema=None, **kw):
         if schema is None:
             cursor = connection.execute(
