@@ -17,7 +17,7 @@ from sqlalchemy.types import (
     TIMESTAMP,
     BLOB,
     UUID,
-    JSON
+    JSON,
 )
 from uuid import UUID as _python_UUID
 

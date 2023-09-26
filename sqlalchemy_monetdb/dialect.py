@@ -79,10 +79,10 @@ class MonetDialect(default.DefaultDialect):
     def import_dbapi(cls):
         return cls.dbapi()
 
-    def _json_serializer (self, obj):
+    def _json_serializer(self, obj):
         return json.dumps(obj)
 
-    def _json_deserializer (self, obj):
+    def _json_deserializer(self, obj):
         return json.loads(obj)
 
     def create_connect_args(self, url):
