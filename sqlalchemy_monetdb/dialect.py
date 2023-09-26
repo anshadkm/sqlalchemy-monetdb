@@ -171,13 +171,13 @@ class MonetDialect(default.DefaultDialect):
         return bool(res)
 
     def _get_sequence( self, connection: "Connection", sequence, schema: Optional[str] = None, **kw):
-        q = "SELECT name, start FROM sys.sequences"
+        q = "SELECT name, start, increment FROM sys.sequences"
         if schema:
-            q += " where schema_id = (select id from schemas where name = :schema)"
-            args = {"schema": schema}
+            q += " where name = :sequence and schema_id = (select id from schemas where name = :schema)"
+            args = {"sequence": sequence, "schema": schema}
         else:
-            q += " where schema_id = (select id from schemas where name = CURRENT_SCHEMA)"
-            args = {}
+            q += " where name = :sequence and schema_id = (select id from schemas where name = CURRENT_SCHEMA)"
+            args = {"sequence": sequence }
         c = connection.execute(text(q), args)
         return c.fetchall()
         #names = [row[0] for row in c]
@@ -343,7 +343,8 @@ class MonetDialect(default.DefaultDialect):
                     if seq_info:
                         for c in result:
                             if c["name"] == name:
-                                c["identity"] = {"start": seq_info[0][1] }
+                                c["identity"] = {"start": seq_info[0][1],
+                                                 "increment": seq_info[0][2] }
 
         return columns.items()
 
