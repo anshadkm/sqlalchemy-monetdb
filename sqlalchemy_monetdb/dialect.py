@@ -68,8 +68,10 @@ class MonetDialect(default.DefaultDialect):
     type_compiler = MonetTypeCompiler
     default_paramstyle = "named"
 
-    def __init__(self, **kwargs):
+    def __init__(self, json_serializer=None, json_deserializer=None, **kwargs):
         default.DefaultDialect.__init__(self, **kwargs)
+        self._json_serializer = json_serializer
+        self._json_deserializer = json_deserializer
 
     @classmethod
     def dbapi(cls):
@@ -78,12 +80,6 @@ class MonetDialect(default.DefaultDialect):
     @classmethod
     def import_dbapi(cls):
         return cls.dbapi()
-
-    def _json_serializer(self, obj):
-        return json.dumps(obj)
-
-    def _json_deserializer(self, obj):
-        return json.loads(obj)
 
     def create_connect_args(self, url):
         opts = url.translate_connect_args()
@@ -113,12 +109,19 @@ class MonetDialect(default.DefaultDialect):
         return [row[0] for row in rs]
 
     @reflection.cache
-    def has_index( self, connection: "Connection", table_name: str, index_name: str, schema: Optional[str] = None, **kw) -> bool:
+    def has_index(
+        self,
+        connection: "Connection",
+        table_name: str,
+        index_name: str,
+        schema: Optional[str] = None,
+        **kw,
+    ) -> bool:
         if self.has_table(connection, table_name, schema=schema):
-            data = self.get_indexes( connection, table_name, schema=schema)
+            data = self.get_indexes(connection, table_name, schema=schema)
             if data:
                 for i in data:
-                    if i['name'] == index_name:
+                    if i["name"] == index_name:
                         return True
         return False
 
