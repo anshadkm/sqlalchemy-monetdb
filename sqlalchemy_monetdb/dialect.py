@@ -167,6 +167,19 @@ class MonetDialect(default.DefaultDialect):
         res = cursor.fetchall()
         return bool(res)
 
+    def _get_sequence( self, connection: "Connection", sequence, schema: Optional[str] = None, **kw):
+        q = "SELECT name, start FROM sys.sequences"
+        if schema:
+            q += " where schema_id = (select id from schemas where name = :schema)"
+            args = {"schema": schema}
+        else:
+            q += " where schema_id = (select id from schemas where name = CURRENT_SCHEMA)"
+            args = {}
+        c = connection.execute(text(q), args)
+        return c.fetchall()
+        #names = [row[0] for row in c]
+        #return names
+
     def get_sequence_names(
         self, connection: "Connection", schema: Optional[str] = None, **kw
     ):
@@ -279,6 +292,7 @@ class MonetDialect(default.DefaultDialect):
 
             if c.rowcount == 0:
                 continue
+            sequences = []
             result = columns[(schema, table_name)]
             for row in c:
                 args = ()
@@ -300,7 +314,6 @@ class MonetDialect(default.DefaultDialect):
                 # monetdb translates an AUTO INCREMENT into a sequence
                 autoincrement = False
                 cdefault = row.cdefault
-                identity = None
                 if cdefault is not None:
                     r = r"""next value for \"(\w*)\"\.\"(\w*)"$"""
                     match = re.search(r, cdefault)
@@ -309,10 +322,7 @@ class MonetDialect(default.DefaultDialect):
                         seq = match.group(2)
                         autoincrement = True
                         cdefault = None
-                        # todo handle identity options
-                        # ie join somehow with sequences
-                        identity = {"start": "0"}
-                        print(seq_schema, seq, autoincrement)
+                        sequences.append((name, seq))
 
                 column = {
                     "name": name,
@@ -321,10 +331,16 @@ class MonetDialect(default.DefaultDialect):
                     "autoincrement": autoincrement,
                     "nullable": row.null,
                 }
-                if identity is not None:
-                    column["identity"] = identity
 
                 result.append(column)
+
+            if sequences:
+                for (name, seq) in sequences:
+                    seq_info = self._get_sequence(connection, seq, schema=seq_schema);
+                    if seq_info:
+                        for c in result:
+                            if c["name"] == name:
+                                c["identity"] = {"start": seq_info[1] }
 
         return columns.items()
 
