@@ -343,7 +343,7 @@ class MonetDialect(default.DefaultDialect):
                     if seq_info:
                         for c in result:
                             if c["name"] == name:
-                                c["identity"] = {"start": seq_info[1] }
+                                c["identity"] = {"start": seq_info[0][1] }
 
         return columns.items()
 
