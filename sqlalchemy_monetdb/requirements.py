@@ -1244,6 +1244,13 @@ class Requirements(SuiteRequirements):
         return exclusions.open()
 
     @property
+    def independent_readonly_connections(self):
+        """
+        connections for read only queries should be added one day.
+        """
+        return exclusions.closed()
+
+    @property
     def skip_mysql_on_windows(self):
         """Catchall for a large variety of MySQL on Windows failures"""
         return exclusions.open()
