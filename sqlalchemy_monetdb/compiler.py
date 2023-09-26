@@ -352,3 +352,23 @@ class MonetCompiler(compiler.SQLCompiler):
                 pattern_replace,
                 self.render_literal_value(flags, sqltypes.STRINGTYPE),
             )
+
+    def visit_json_getitem_op_binary(
+        self, binary, operator, _cast_applied=False, **kw
+    ):
+        if binary.type._type_affinity is sqltypes.JSON:
+            expr = "cast (json.filter(%s, %s) as json)"
+        else:
+            expr = "json.filter(%s, %s)"
+        return expr % (
+            self.process(binary.left, **kw),
+            self.process(binary.right, **kw),
+        )
+
+    def visit_json_path_getitem_op_binary(
+        self, binary, operator, _cast_applied=False, **kw
+    ):
+        return "json.filter(%s, %s)" % (
+            self.process(binary.left, **kw),
+            self.process(binary.right, **kw),
+        )
