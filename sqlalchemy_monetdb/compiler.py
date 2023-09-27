@@ -1,5 +1,5 @@
 from sqlalchemy import types as sqltypes, schema, util
-from sqlalchemy.sql import compiler, operators
+from sqlalchemy.sql import compiler, operators, cast
 
 # from .monetdb_types import TIME as TIME
 import re
@@ -360,6 +360,11 @@ class MonetCompiler(compiler.SQLCompiler):
             expr = "cast (json.filter(%s, %s) as json)"
         else:
             expr = "json.filter(%s, %s)"
+
+        if not _cast_applied:
+            kw['_cast_applied'] = True
+            return self.process(cast(cast(binary, sqltypes.STRINGTYPE), binary.type), **kw)
+
         return expr % (
             self.process(binary.left, **kw),
             self.process(binary.right, **kw),
@@ -368,6 +373,10 @@ class MonetCompiler(compiler.SQLCompiler):
     def visit_json_path_getitem_op_binary(
         self, binary, operator, _cast_applied=False, **kw
     ):
+        if not _cast_applied:
+            kw['_cast_applied'] = True
+            return self.process(cast(binary, binary.type), **kw)
+
         return "json.filter(%s, %s)" % (
             self.process(binary.left, **kw),
             self.process(binary.right, **kw),
