@@ -1,6 +1,8 @@
+from collections.abc import Sequence
 from typing import Optional
 from typing import TYPE_CHECKING
 from typing import overload
+
 
 from sqlalchemy.sql import sqltypes as sqltypes
 from sqlalchemy.types import (
@@ -63,6 +65,40 @@ class TIME(sqltypes.TIME):
 
 class MDB_JSON(sqltypes.JSON):
     __visit_name__ = "JSON"
+
+
+class JSONPathType(sqltypes.JSON.JSONPathType):
+    def _processor(self, dialect, super_proc):
+        def process(value):
+            if issubclass(type(value), Sequence):
+                value = "$%s" % (
+                    "".join(
+                        [
+                            "[%s]" % e if isinstance(e, int) else '.%s' % e
+                            for e in value
+                        ]
+                    )
+                )
+            elif isinstance(value, str):
+                return value
+            else:
+                value = "{}"
+            if super_proc:
+                value = super_proc(value)
+
+            return value
+
+        return process
+
+    def bind_processor(self, dialect):
+        return self._processor(dialect, self.string_bind_processor(dialect))
+
+    def literal_processor(self, dialect):
+        return self._processor(dialect, self.string_literal_processor(dialect))
+
+
+class JSONPATH(JSONPathType):
+    __visit_name__ = "JSONPATH"
 
 
 class MDB_UUID(sqltypes.UUID[sqltypes._UUID_RETURN]):

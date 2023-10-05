@@ -159,6 +159,9 @@ class MonetTypeCompiler(compiler.GenericTypeCompiler):
     def visit_JSON(self, type_, **kw):
         return "JSON"
 
+    def visit_JSONPath(self, type_, **kw):
+        return "JSONPATH"
+
 
 class MonetCompiler(compiler.SQLCompiler):
     # MonetDB only allowes simple names (strings) as parameters names
