@@ -1,7 +1,7 @@
+# import pdb
 from sqlalchemy import types as sqltypes, schema, util
 from sqlalchemy.sql import compiler, operators, cast
 
-# from .monetdb_types import TIME as TIME
 import re
 
 FK_ON_DELETE = re.compile(
@@ -218,16 +218,6 @@ class MonetCompiler(compiler.SQLCompiler):
         )
         return exc
 
-    """
-    def limit_clause(self, select, **kw):
-        text = ""
-        if select._limit is not None:
-            text += "\nLIMIT " + str(select._limit)
-        if select._offset is not None:
-            text += " OFFSET " + str(select._offset)
-        return text
-    """
-
     def limit_clause(self, select, **kw):
         text = ""
         if select._limit_clause is not None:
@@ -375,8 +365,9 @@ class MonetCompiler(compiler.SQLCompiler):
     ):
         if not _cast_applied:
             kw['_cast_applied'] = True
-            return self.process(cast(binary, binary.type), **kw)
+            return self.process(cast(cast(binary, sqltypes.STRINGTYPE), binary.type), **kw)
 
+        # pdb.set_trace()
         return "json.filter(%s, %s)" % (
             self.process(binary.left, **kw),
             self.process(binary.right, **kw),

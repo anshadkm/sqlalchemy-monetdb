@@ -16,8 +16,8 @@ from sqlalchemy.types import (
     DECIMAL,
     TIMESTAMP,
     BLOB,
-    UUID,
     JSON,
+    UUID,
 )
 from uuid import UUID as _python_UUID
 
@@ -106,6 +106,6 @@ MONETDB_TYPE_MAP = {
     "timestamp": TIMESTAMP,
     "timestamptz": TIMESTAMP,
     "varchar": VARCHAR,
-    "uuid": UUID,
-    "json": JSON,
+    "uuid": MDB_UUID,
+    "json": MDB_JSON,
 }

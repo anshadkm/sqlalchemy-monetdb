@@ -20,7 +20,6 @@ from sqlalchemy_monetdb.compiler import (
 )
 from sqlalchemy_monetdb.monetdb_types import MONETDB_TYPE_MAP
 
-# from .monetdb_types import TIME
 import pymonetdb
 
 pymonetdb.paramstyle = "named"
