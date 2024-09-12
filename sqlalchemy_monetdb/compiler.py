@@ -75,16 +75,6 @@ class MonetDDLCompiler(compiler.DDLCompiler):
             colspec += " NOT NULL"
         return colspec
 
-    def visit_check_constraint(self, constraint, **kwargs):
-        # TODO: this turns out to be an error in pytest
-        # util.warn("Skipped unsupported check constraint %s" % constraint.name)
-        return None
-
-    def visit_column_check_constraint(self, constraint, **kw):
-        # TODO: this turns out to be an error in pytest
-        # util.warn("Skipped unsupported check constraint %s" % constraint.name)
-        return None
-
     def visit_create_index(self, create, **kw):
         preparer = self.preparer
         index = create.element
@@ -346,32 +336,23 @@ class MonetCompiler(compiler.SQLCompiler):
                 self.render_literal_value(flags, sqltypes.STRINGTYPE),
             )
 
-    def visit_json_getitem_op_binary(
-        self, binary, operator, _cast_applied=False, **kw
-    ):
+    def _render_json_extract_from_binary(self, binary, operator, _cast_applied=False, **kw):
+        if (
+            not _cast_applied
+            and binary.type._type_affinity is not sqltypes.JSON
+        ):
+            kw["_cast_applied"] = True
+            return self.process(cast(binary, binary.type), **kw)
+
+        left = self.process(binary.left, **kw)
+        right = self.process(binary.right, **kw)
         if binary.type._type_affinity is sqltypes.JSON:
-            expr = "cast (json.filter(%s, %s) as json)"
+            return "JSON.FILTER(%s, %s)" % (left, right)
         else:
-            expr = "json.filter(%s, %s)"
+            return "CASE JSON.FILTER(%s, %s) WHEN 'null' THEN NULL ELSE JSON.TEXT(JSON.FILTER(%s, %s)) END" % (left, right, left, right)
 
-        if not _cast_applied:
-            kw['_cast_applied'] = True
-            return self.process(cast(cast(binary, sqltypes.STRINGTYPE), binary.type), **kw)
+    def visit_json_getitem_op_binary(self, binary, operator, _cast_applied=False, **kw):
+        return self._render_json_extract_from_binary(binary, operator, _cast_applied, **kw)
 
-        return expr % (
-            self.process(binary.left, **kw),
-            self.process(binary.right, **kw),
-        )
-
-    def visit_json_path_getitem_op_binary(
-        self, binary, operator, _cast_applied=False, **kw
-    ):
-        if not _cast_applied:
-            kw['_cast_applied'] = True
-            return self.process(cast(cast(binary, sqltypes.STRINGTYPE), binary.type), **kw)
-
-        # pdb.set_trace()
-        return "json.filter(%s, %s)" % (
-            self.process(binary.left, **kw),
-            self.process(binary.right, **kw),
-        )
+    def visit_json_path_getitem_op_binary(self, binary, operator, _cast_applied=False, **kw):
+        return self._render_json_extract_from_binary(binary, operator, _cast_applied, **kw)

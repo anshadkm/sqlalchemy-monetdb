@@ -1,2 +1,2 @@
-pymonetdb==1.7.1
-sqlalchemy==2.0.20
+pymonetdb==1.8.2
+sqlalchemy==2.0.34

@@ -19,6 +19,9 @@ class FetchLimitOffsetTest(FetchLimitOffsetTest):
 class CTETest(CTETest):
     pass
 
-# @pytest.mark.skip(reason="The dialect is not supporting JSON type")
-# class JSONTest(JSONTest):
-#     pass
+class JSONTest:
+    @pytest.mark.skip(reason="MonetDB normalizes json input "
+                        "by removing whitespace. "
+                        "This is unexpected in this test.")
+    def test_round_trip_custom_json(self):
+        pass

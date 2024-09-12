@@ -716,7 +716,7 @@ class Requirements(SuiteRequirements):
     @property
     def check_constraint_reflection(self):
         """target dialect supports reflection of check constraints"""
-        return exclusions.closed()
+        return exclusions.open()
 
     @property
     def duplicate_key_raises_integrity_error(self):

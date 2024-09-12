@@ -1,7 +1,7 @@
 import json
 import re
 import typing
-from typing import Optional
+from typing import Optional, List, Any
 from collections import defaultdict
 
 from sqlalchemy import text
@@ -11,6 +11,8 @@ from sqlalchemy import text
 
 from sqlalchemy import pool, exc
 from sqlalchemy.engine import default, reflection, ObjectScope, ObjectKind
+from sqlalchemy.engine.interfaces import ReflectedCheckConstraint
+from sqlalchemy.sql import sqltypes
 
 from sqlalchemy_monetdb.base import MonetExecutionContext, MonetIdentifierPreparer
 from sqlalchemy_monetdb.compiler import (
@@ -18,7 +20,7 @@ from sqlalchemy_monetdb.compiler import (
     MonetTypeCompiler,
     MonetCompiler,
 )
-from sqlalchemy_monetdb.monetdb_types import MONETDB_TYPE_MAP
+from sqlalchemy_monetdb.monetdb_types import MONETDB_TYPE_MAP, JSONPathType
 
 import pymonetdb
 
@@ -66,6 +68,10 @@ class MonetDialect(default.DefaultDialect):
     preparer = MonetIdentifierPreparer
     type_compiler = MonetTypeCompiler
     default_paramstyle = "named"
+
+    colspecs =  {
+                    sqltypes.JSON.JSONPathType: JSONPathType,
+                }
 
     def __init__(self, json_serializer=None, json_deserializer=None, **kwargs):
         default.DefaultDialect.__init__(self, **kwargs)
@@ -892,8 +898,47 @@ ORDER BY fk_t, fk, o
         res = [{"column_names": c, "name": n} for n, c in col_dict.items()]
         return res
 
-    def get_check_constraints(self, connection, table_name, schema=None, **kw):
-        return []
+
+    def get_check_constraints(self, connection: "Connection", table_name: str, schema: str | None = None, **kw:Any) -> List[ReflectedCheckConstraint]:
+        """Return information about check constraints in `table_name`.
+
+        Given a string `table_name` and an optional string `schema`, return
+        check constraint information as a list of dicts with these keys:
+
+        name
+          name of check constraint
+
+        sqltext
+            the check constraint’s SQL expression
+
+        **kw
+          other options passed to the dialect's get_check_constraints() method.
+
+        .. versionadded:: 2.0.0
+
+        """
+
+        q = """
+        SELECT k.name name, sys.check_constraint(:schema, k.name) sqltext
+                 FROM
+                    sys.tables t,
+                    sys.keys k
+                 WHERE
+                    k.table_id = t.id AND
+                    t.id = :table_id AND
+                    k.type = 4
+                order by name
+        """
+
+        if schema is None:
+            schema = connection.execute(text("SELECT current_schema")).scalar()
+
+        args = {"table_id": self._table_id(connection, table_name, schema), "schema": schema}
+        c = connection.execute(text(q), args)
+        table = c.fetchall()
+
+        res = [{"name": name, "sqltext": sqltext} for name, sqltext in table]
+        return res
 
     def get_isolation_level_values(self, dbapi_conn):
         return (
