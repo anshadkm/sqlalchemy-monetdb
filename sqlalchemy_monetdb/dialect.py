@@ -396,6 +396,10 @@ class MonetDialect(default.DefaultDialect):
             connection, filter_names, schema, temp=temp, tabletypes=tabletypes, **kw
         )
 
+    def _get_server_version_info(self, connection):
+        version = connection.execute(text("SELECT value FROM environment WHERE name = 'monet_version'")).scalar()
+        return tuple(int(part) for part in version.split('.'))
+
     def _value_or_raise(self, data, table, schema):
         try:
             return dict(data)[(schema, table)]
@@ -917,6 +921,11 @@ ORDER BY fk_t, fk, o
         .. versionadded:: 2.0.0
 
         """
+        if not self.server_version_info >= (11, 51, 3):
+            raise NotImplementedError(
+                "CHECK constraint are supported only by "
+                "MonetDB server 11.51.3 or greater"
+            )
 
         q = """
         SELECT k.name name, sys.check_constraint(:schema, k.name) sqltext
