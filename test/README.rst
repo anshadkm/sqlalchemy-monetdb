@@ -15,7 +15,6 @@ Create a test schema::
 
 Now you can run the test suite::
 
-    $ tox
-
+    $ pytest test
 
 The ``--db`` flag selects one of the preconfigured database URLs defined in setup.cfg.

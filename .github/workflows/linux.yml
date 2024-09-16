@@ -5,31 +5,40 @@ on: [push]
 jobs:
   linux-test:
     runs-on: ubuntu-20.04
+    env:
+      DATABASE: test
     continue-on-error: true
+    services:
+      monetdb:
+        image: "monetdb/dev-builds:Aug2024"
+        env:
+          MDB_CREATE_DBS: '${{ env.DATABASE }}'
+          MDB_DB_ADMIN_PASS: monetdb
+        ports:
+          - 50000:50000
     strategy:
       matrix:
         branch: [default]
-        python-version: [3.8, 3.9, '3.10', '3.11']
-    container: monetdb/dev-builds:${{ matrix.branch }}
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-
+        uses: actions/checkout@v4
+      - name: Install Debian packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y software-properties-common curl make
+          curl https://www.monetdb.org/downloads/MonetDB-GPG-KEY | sudo apt-key add -
+          sudo add-apt-repository 'deb http://dev.monetdb.org/downloads/deb/ focal monetdb'
+          sudo apt-get update -qq
+          sudo apt-get install -y monetdb-client
+      - name: Initialize MonetDB database
+        run: |
+          sudo -u monetdb mclient -d "monetdb://localhost:50000/${{ env.DATABASE }}?user=monetdb&password=monetdb" -s "create schema test_schema;"
+          sudo -u monetdb mclient -d "monetdb://localhost:50000/${{ env.DATABASE }}?user=monetdb&password=monetdb" -s "create schema test_schema2;"
+          sudo -u monetdb mclient -d "monetdb://localhost:50000/${{ env.DATABASE }}?user=monetdb&password=monetdb" -s "alter user monetdb set schema test_schema2;"
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-
-            # - name: Setup database
-            #   run: |
-            #     cd test 
-            #     ./initfarm.sh
-            #     ./initdb.sh
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install tox tox-gh-actions
-
-      - name: Run Tox
-        run: tox
+      - name: Run tests
+        run: make pytest

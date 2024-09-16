@@ -903,7 +903,7 @@ ORDER BY fk_t, fk, o
         return res
 
 
-    def get_check_constraints(self, connection: "Connection", table_name: str, schema: str | None = None, **kw:Any) -> List[ReflectedCheckConstraint]:
+    def get_check_constraints(self, connection, table_name, schema, **kw):
         """Return information about check constraints in `table_name`.
 
         Given a string `table_name` and an optional string `schema`, return
